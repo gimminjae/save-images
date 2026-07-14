@@ -43,6 +43,18 @@ function readNumber(value: FormDataEntryValue | unknown) {
   return undefined;
 }
 
+function toBooleanInput(value: unknown, fallbackValue: boolean) {
+  if (typeof value === "boolean") {
+    return String(value);
+  }
+
+  if (typeof value === "string") {
+    return value;
+  }
+
+  return String(fallbackValue);
+}
+
 async function assertCategoryExists(categoryId: string) {
   if (!(await getCategoryById(categoryId))) {
     throw new Error("선택한 카테고리를 찾지 못했어요.");
@@ -252,18 +264,15 @@ export async function PATCH(request: Request, context: RouteContext) {
       department: typeof department === "string" ? department : existingMemory.department,
       description: typeof description === "string" ? description : existingMemory.description,
       categoryId: nextCategoryId,
-      isVisible:
-        typeof isVisible === "string"
-          ? isVisible
-          : String(existingMemory.isVisible),
-      isCategoryFeatured:
-        typeof isCategoryFeatured === "string"
-          ? isCategoryFeatured
-          : String(existingMemory.isCategoryFeatured),
-      isMainFeatured:
-        typeof isMainFeatured === "string"
-          ? isMainFeatured
-          : String(existingMemory.isMainFeatured),
+      isVisible: toBooleanInput(isVisible, existingMemory.isVisible),
+      isCategoryFeatured: toBooleanInput(
+        isCategoryFeatured,
+        existingMemory.isCategoryFeatured,
+      ),
+      isMainFeatured: toBooleanInput(
+        isMainFeatured,
+        existingMemory.isMainFeatured,
+      ),
       ...(imagePayload ?? {}),
     });
 
