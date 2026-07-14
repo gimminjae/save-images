@@ -10,11 +10,13 @@ import {
   getMissingSupabasePublicEnv,
   getMissingStorageEnv,
 } from "@/lib/env";
-import { getCategoryById } from "@/lib/supabase/categories";
+import {
+  getCategoryById,
+  getCategoryDescendantIds,
+} from "@/lib/supabase/categories";
 import {
   createMemory,
   listAllMemories,
-  listPublishedMemories,
 } from "@/lib/supabase/memories";
 import { getFileStemName } from "@/lib/utils";
 import {
@@ -66,6 +68,14 @@ export async function GET(request: Request) {
     const mainFeatured = url.searchParams.get("mainFeatured") === "true";
     const categoryFeatured =
       url.searchParams.get("categoryFeatured") === "true";
+    const includeDescendants =
+      url.searchParams.get("includeDescendants") !== "false";
+    const categoryId = url.searchParams.get("categoryId")?.trim() ?? "";
+    const categoryIds = categoryId
+      ? includeDescendants
+        ? await getCategoryDescendantIds(categoryId)
+        : [categoryId]
+      : undefined;
 
     const memories =
       mainFeatured || categoryFeatured
@@ -74,8 +84,13 @@ export async function GET(request: Request) {
             onlyVisible: true,
             onlyMainFeatured: mainFeatured,
             onlyCategoryFeatured: categoryFeatured,
+            categoryIds,
           })
-        : await listPublishedMemories(limit);
+        : await listAllMemories({
+            limit,
+            onlyVisible: true,
+            categoryIds,
+          });
     return NextResponse.json({ memories });
   } catch (error) {
     console.error("Failed to list memories", error);

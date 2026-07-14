@@ -240,7 +240,7 @@ export function CategoryManager({
           type="button"
           onClick={handleCreate}
           disabled={isPending || !createDraft.name.trim()}
-          className="event-button-primary inline-flex h-[48px] items-center justify-center rounded-full px-5 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-60"
+          className="event-button-primary inline-flex h-[48px] w-full items-center justify-center rounded-full px-5 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-60 md:w-auto"
         >
           추가
         </button>
@@ -313,14 +313,14 @@ export function CategoryManager({
                   <button
                     type="button"
                     onClick={() => void handleSave(category.id)}
-                    className="event-button-primary inline-flex h-[46px] items-center justify-center rounded-full px-5 text-sm font-black text-white"
+                    className="event-button-primary inline-flex h-[46px] w-full items-center justify-center rounded-full px-5 text-sm font-black text-white md:w-auto"
                   >
                     저장
                   </button>
                   <button
                     type="button"
                     onClick={() => setEditingId(null)}
-                    className="event-button-secondary inline-flex h-[46px] items-center justify-center rounded-full px-5 text-sm font-black text-sky-950"
+                    className="event-button-secondary inline-flex h-[46px] w-full items-center justify-center rounded-full px-5 text-sm font-black text-sky-950 md:w-auto"
                   >
                     취소
                   </button>
@@ -341,18 +341,18 @@ export function CategoryManager({
                       {category.path}
                     </p>
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
                     <button
                       type="button"
                       onClick={() => beginEdit(category)}
-                      className="event-button-secondary inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-black text-sky-950"
+                      className="event-button-secondary inline-flex h-10 w-full items-center justify-center rounded-full px-4 text-sm font-black text-sky-950 sm:w-auto"
                     >
                       수정
                     </button>
                     <button
                       type="button"
                       onClick={() => void handleDelete(category)}
-                      className="inline-flex h-10 items-center justify-center rounded-full border border-rose-200 bg-rose-50 px-4 text-sm font-black text-rose-700"
+                      className="inline-flex h-10 w-full items-center justify-center rounded-full border border-rose-200 bg-rose-50 px-4 text-sm font-black text-rose-700 sm:w-auto"
                     >
                       삭제
                     </button>

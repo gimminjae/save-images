@@ -153,7 +153,7 @@ export function DownloadManager({ memories }: DownloadManagerProps) {
                 </a>
               </div>
 
-              <div className="mt-4 flex h-[220px] items-center justify-center overflow-hidden rounded-[20px] border border-white/70 bg-sky-50 p-3 sm:h-[250px] sm:rounded-[22px] xl:h-[280px]">
+              <div className="mt-4 flex h-[200px] items-center justify-center overflow-hidden rounded-[20px] border border-white/70 bg-sky-50 p-3 sm:h-[250px] sm:rounded-[22px] xl:h-[280px]">
                 <img
                   src={memory.imageUrl}
                   alt={publicName}

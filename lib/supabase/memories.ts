@@ -119,6 +119,10 @@ export async function listAllMemories(options?: {
   onlyMainFeatured?: boolean;
   onlyCategoryFeatured?: boolean;
 }) {
+  if (options?.categoryIds && options.categoryIds.length === 0) {
+    return [];
+  }
+
   const supabase = getSupabasePublic();
   let query = supabase
     .from("memories")

@@ -441,7 +441,7 @@ export function ImageUploadConsole({
               key={entry.id}
               className="rounded-[28px] border border-sky-300/65 bg-white/88 p-4 shadow-[0_16px_28px_rgba(33,110,178,0.12)]"
             >
-              <div className="flex h-[220px] items-center justify-center overflow-hidden rounded-[22px] border border-white/70 bg-sky-50 p-3">
+              <div className="flex h-[200px] items-center justify-center overflow-hidden rounded-[22px] border border-white/70 bg-sky-50 p-3 sm:h-[220px]">
                 <img
                   src={entry.previewUrl}
                   alt={entry.name}
@@ -513,12 +513,12 @@ export function ImageUploadConsole({
                 </div>
               ) : null}
 
-              <div className="mt-4 flex justify-end">
+              <div className="mt-4 flex">
                 <button
                   type="button"
                   disabled={isUploading}
                   onClick={() => removeEntry(entry.id)}
-                  className="inline-flex h-10 items-center justify-center rounded-full border border-rose-200 bg-rose-50 px-4 text-sm font-black text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex h-10 w-full items-center justify-center rounded-full border border-rose-200 bg-rose-50 px-4 text-sm font-black text-rose-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                 >
                   목록에서 제거
                 </button>
@@ -533,7 +533,7 @@ export function ImageUploadConsole({
           type="button"
           onClick={clearCompletedEntries}
           disabled={isUploading || completedCount === 0}
-          className="event-button-secondary inline-flex h-12 items-center justify-center rounded-full px-6 text-sm font-black text-sky-950 disabled:cursor-not-allowed disabled:opacity-60"
+          className="event-button-secondary inline-flex h-12 w-full items-center justify-center rounded-full px-6 text-sm font-black text-sky-950 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
         >
           완료 항목 정리
         </button>
@@ -546,7 +546,7 @@ export function ImageUploadConsole({
             categories.length === 0 ||
             !effectiveCategoryId
           }
-          className="event-button-primary inline-flex h-12 items-center justify-center rounded-full px-6 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-60"
+          className="event-button-primary inline-flex h-12 w-full items-center justify-center rounded-full px-6 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
         >
           {isUploading ? "직접 업로드 진행 중..." : "선택한 이미지 빠르게 업로드"}
         </button>

@@ -29,26 +29,26 @@ function DisplaySlide({
       />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.08),transparent_42%),linear-gradient(180deg,rgba(3,10,24,0.6),rgba(3,10,24,0.22)_18%,rgba(3,10,24,0.14)_62%,rgba(3,10,24,0.72))]" />
 
-      <div className="relative flex h-full flex-col px-6 py-8 text-white sm:px-10 sm:py-10">
+      <div className="relative flex h-full flex-col px-4 py-5 text-white sm:px-10 sm:py-10">
         <header className="text-center">
-          <p className="display-script text-4xl text-white drop-shadow-[0_10px_28px_rgba(0,0,0,0.28)] sm:text-6xl">
+          <p className="display-script text-3xl text-white drop-shadow-[0_10px_28px_rgba(0,0,0,0.28)] sm:text-6xl">
             {publicName}
           </p>
         </header>
 
-        <div className="flex flex-1 items-center justify-center py-6 sm:py-8">
-          <div className="flex h-full w-full max-w-[1440px] items-center justify-center rounded-[32px] border border-white/18 bg-white/8 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.25)] backdrop-blur-[3px] sm:p-6">
+        <div className="flex flex-1 items-center justify-center py-4 sm:py-8">
+          <div className="flex h-full w-full max-w-[1440px] items-center justify-center rounded-[24px] border border-white/18 bg-white/8 p-3 shadow-[0_24px_80px_rgba(0,0,0,0.25)] backdrop-blur-[3px] sm:rounded-[32px] sm:p-6">
             <img
               src={memory.imageUrl}
               alt={memory.description}
-              className="max-h-[66vh] w-auto max-w-full rounded-[24px] object-contain shadow-[0_18px_46px_rgba(0,0,0,0.32)]"
+              className="max-h-[52vh] w-auto max-w-full rounded-[18px] object-contain shadow-[0_18px_46px_rgba(0,0,0,0.32)] sm:max-h-[66vh] sm:rounded-[24px]"
             />
           </div>
         </div>
 
         <footer className="flex justify-center">
-          <div className="max-w-5xl rounded-[28px] border border-white/20 bg-black/26 px-6 py-4 text-center shadow-[0_14px_34px_rgba(0,0,0,0.2)] backdrop-blur-md">
-            <p className="text-lg font-semibold leading-8 text-white/95 sm:text-2xl sm:leading-10">
+          <div className="max-w-5xl rounded-[24px] border border-white/20 bg-black/26 px-4 py-3 text-center shadow-[0_14px_34px_rgba(0,0,0,0.2)] backdrop-blur-md sm:rounded-[28px] sm:px-6 sm:py-4">
+            <p className="text-sm font-semibold leading-6 text-white/95 sm:text-2xl sm:leading-10">
               {memory.description}
             </p>
           </div>
@@ -152,7 +152,7 @@ export function DisplaySlideshow({
         <DisplaySlide memory={incomingMemory} animated />
       ) : null}
 
-      <div className="pointer-events-none absolute left-5 top-5 z-20 flex items-center gap-2 sm:left-8 sm:top-8">
+      <div className="pointer-events-none absolute left-3 top-3 z-20 flex flex-col items-start gap-2 sm:left-8 sm:top-8 sm:flex-row sm:items-center">
         <span className="rounded-full border border-white/18 bg-white/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.24em] text-white/90 backdrop-blur-md">
           실시간 전시
         </span>
@@ -162,7 +162,7 @@ export function DisplaySlideshow({
       </div>
 
       {errorMessage ? (
-        <div className="absolute right-5 top-5 z-20 max-w-sm rounded-full border border-rose-300/30 bg-rose-500/18 px-4 py-2 text-xs font-medium text-rose-50 backdrop-blur-md sm:right-8 sm:top-8">
+        <div className="absolute left-3 right-3 top-[calc(env(safe-area-inset-top)+4.25rem)] z-20 rounded-[20px] border border-rose-300/30 bg-rose-500/18 px-4 py-2 text-xs font-medium text-rose-50 backdrop-blur-md sm:left-auto sm:right-8 sm:top-8 sm:max-w-sm sm:rounded-full">
           {errorMessage}
         </div>
       ) : null}

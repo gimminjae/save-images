@@ -42,9 +42,7 @@ function ImageManagerCard({
 }) {
   const [name, setName] = useState(memory.name);
   const [categoryId, setCategoryId] = useState(memory.categoryId ?? "");
-  const [isCategoryFeatured, setIsCategoryFeatured] = useState(
-    memory.isCategoryFeatured,
-  );
+  const [isCategoryFeatured] = useState(memory.isCategoryFeatured);
   const [isMainFeatured, setIsMainFeatured] = useState(memory.isMainFeatured);
   const [isVisible, setIsVisible] = useState(memory.isVisible);
   const [file, setFile] = useState<File | null>(null);
@@ -247,7 +245,7 @@ function ImageManagerCard({
         ) : null}
       </div>
 
-      <div className="mt-4 flex h-[220px] items-center justify-center overflow-hidden rounded-[22px] border border-white/70 bg-sky-50 p-3 sm:h-[280px]">
+      <div className="mt-4 flex h-[200px] items-center justify-center overflow-hidden rounded-[22px] border border-white/70 bg-sky-50 p-3 sm:h-[280px]">
         <img
           src={previewUrl || memory.imageUrl}
           alt={name}
@@ -324,7 +322,7 @@ function ImageManagerCard({
           </div>
         ) : null}
 
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2">
           <label className="flex items-center gap-3 rounded-[18px] border border-sky-200/80 bg-sky-50/70 px-4 py-3 text-sm font-black text-slate-900">
             <input
               type="checkbox"
@@ -334,6 +332,7 @@ function ImageManagerCard({
             />
             공개 노출
           </label>
+          {/* 대표 이미지 설정 UI는 잠시 숨김
           <label className="flex items-center gap-3 rounded-[18px] border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-sm font-black text-slate-900">
             <input
               type="checkbox"
@@ -343,6 +342,7 @@ function ImageManagerCard({
             />
             대표 이미지
           </label>
+          */}
           <label className="flex items-center gap-3 rounded-[18px] border border-fuchsia-200/80 bg-fuchsia-50/80 px-4 py-3 text-sm font-black text-slate-900">
             <input
               type="checkbox"
@@ -371,14 +371,14 @@ function ImageManagerCard({
             type="button"
             onClick={handleDelete}
             disabled={isBusy}
-            className="inline-flex h-11 items-center justify-center rounded-full border border-rose-200 bg-rose-50 px-5 text-sm font-black text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-11 w-full items-center justify-center rounded-full border border-rose-200 bg-rose-50 px-5 text-sm font-black text-rose-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
           >
             {isDeleting ? "삭제 중..." : "삭제"}
           </button>
           <button
             type="submit"
             disabled={isBusy || !name.trim() || !categoryId}
-            className="event-button-primary inline-flex h-11 items-center justify-center rounded-full px-5 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-60"
+            className="event-button-primary inline-flex h-11 w-full items-center justify-center rounded-full px-5 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
           >
             {isSaving
               ? saveStage === "uploading"

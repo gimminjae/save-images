@@ -53,6 +53,7 @@
 
 html {
   font-family: var(--font-sans);
+  overflow-x: hidden;
   background:
     radial-gradient(circle at top, rgba(255, 255, 255, 0.5), transparent 35%),
     linear-gradient(180deg, #bdf8ff 0%, #97ebf6 48%, #bdf9f5 100%);
@@ -60,12 +61,14 @@ html {
 
 body {
   min-height: 100vh;
+  overflow-x: hidden;
   background:
     radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.45), transparent 28%),
     linear-gradient(180deg, #bdf8ff 0%, #97ebf6 48%, #bdf9f5 100%);
   color: var(--foreground);
   font-family: var(--font-sans);
   text-rendering: optimizeLegibility;
+  -webkit-tap-highlight-color: transparent;
 }
 
 a {
@@ -186,4 +189,13 @@ img {
 
 .display-fade-in {
   animation: displayFadeIn 900ms ease forwards;
+}
+
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
 }

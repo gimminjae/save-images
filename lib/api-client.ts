@@ -79,6 +79,8 @@ export async function fetchPublishedMemories(
     limit?: number;
     mainFeatured?: boolean;
     categoryFeatured?: boolean;
+    categoryId?: string;
+    includeDescendants?: boolean;
     signal?: AbortSignal;
   },
 ) {
@@ -87,6 +89,8 @@ export async function fetchPublishedMemories(
       limit: options?.limit,
       mainFeatured: options?.mainFeatured,
       categoryFeatured: options?.categoryFeatured,
+      categoryId: options?.categoryId,
+      includeDescendants: options?.includeDescendants,
     }),
     {
       cache: "no-store",

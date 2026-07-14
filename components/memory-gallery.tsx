@@ -75,8 +75,10 @@ export function MemoryGallery({ memories }: MemoryGalleryProps) {
         )}
 
       <MemoryDetailModal
+        key={selectedMemory?.id ?? "memory-detail-empty"}
         memory={selectedMemory}
         onClose={() => setSelectedMemory(null)}
+        onUpdated={(updatedMemory) => setSelectedMemory(updatedMemory)}
       />
     </>
   );
