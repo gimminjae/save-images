@@ -8,16 +8,29 @@ export const MAX_DEPARTMENT_LENGTH = 32;
 export const MAX_DESCRIPTION_LENGTH = 280;
 export const ACCEPTED_IMAGE_TYPES = [
   "image/jpeg",
+  "image/jpg",
+  "image/pjpeg",
   "image/png",
   "image/webp",
 ] as const;
+export const ACCEPTED_IMAGE_INPUT_ACCEPT =
+  ".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp";
 
 const IMAGE_EXTENSION_BY_TYPE: Record<(typeof ACCEPTED_IMAGE_TYPES)[number], string> =
   {
     "image/jpeg": "jpg",
+    "image/jpg": "jpg",
+    "image/pjpeg": "jpg",
     "image/png": "png",
     "image/webp": "webp",
   };
+
+const IMAGE_TYPE_BY_EXTENSION = {
+  jpeg: "image/jpeg",
+  jpg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+} as const;
 
 type ImageUploadInput = {
   fileName: string;
@@ -67,21 +80,42 @@ export function getImageExtension(fileType: string) {
   return IMAGE_EXTENSION_BY_TYPE[fileType as keyof typeof IMAGE_EXTENSION_BY_TYPE] ?? null;
 }
 
+function getCanonicalImageType(fileName: string, fileType: string) {
+  const normalizedFileType = fileType.trim().toLowerCase();
+
+  if (normalizedFileType in IMAGE_EXTENSION_BY_TYPE) {
+    return normalizedFileType as keyof typeof IMAGE_EXTENSION_BY_TYPE;
+  }
+
+  const extension = fileName.split(".").pop()?.trim().toLowerCase() ?? "";
+
+  if (extension in IMAGE_TYPE_BY_EXTENSION) {
+    return IMAGE_TYPE_BY_EXTENSION[extension as keyof typeof IMAGE_TYPE_BY_EXTENSION];
+  }
+
+  return null;
+}
+
 export function validateImageUploadInput(input: unknown): ImageUploadInput {
   assert(input && typeof input === "object", "잘못된 업로드 요청입니다.");
 
   const payload = input as Partial<ImageUploadInput>;
+  const normalizedFileName =
+    typeof payload.fileName === "string" ? payload.fileName.trim() : "";
+  const normalizedFileType =
+    typeof payload.fileType === "string" ? payload.fileType : "";
+  const canonicalFileType = getCanonicalImageType(
+    normalizedFileName,
+    normalizedFileType,
+  );
 
   assert(
-    typeof payload.fileName === "string" && payload.fileName.trim().length > 0,
+    normalizedFileName.length > 0,
     "파일 이름이 비어 있어요.",
   );
   assert(
-    typeof payload.fileType === "string" &&
-      ACCEPTED_IMAGE_TYPES.includes(
-        payload.fileType as (typeof ACCEPTED_IMAGE_TYPES)[number],
-      ),
-    "JPG, PNG, WEBP 파일만 업로드할 수 있어요.",
+    canonicalFileType !== null,
+    "JPG, JPEG, PNG, WEBP 파일만 업로드할 수 있어요.",
   );
   assert(
     typeof payload.fileSize === "number" &&
@@ -95,8 +129,8 @@ export function validateImageUploadInput(input: unknown): ImageUploadInput {
   );
 
   return {
-    fileName: payload.fileName.trim(),
-    fileType: payload.fileType,
+    fileName: normalizedFileName,
+    fileType: canonicalFileType,
     fileSize: payload.fileSize,
   };
 }

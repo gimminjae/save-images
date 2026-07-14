@@ -11,7 +11,7 @@ import {
   uploadFileToPresignedUrl,
 } from "@/lib/direct-upload-client";
 import {
-  ACCEPTED_IMAGE_TYPES,
+  ACCEPTED_IMAGE_INPUT_ACCEPT,
   MAX_NAME_LENGTH,
 } from "@/lib/validations/memory";
 import type { CategoryRecord } from "@/types/category";
@@ -287,7 +287,7 @@ function ImageManagerCard({
           <span className="text-sm font-black text-slate-900">이미지 교체</span>
           <input
             type="file"
-            accept={ACCEPTED_IMAGE_TYPES.join(",")}
+            accept={ACCEPTED_IMAGE_INPUT_ACCEPT}
             onChange={(event) => {
               const nextFile = event.target.files?.[0] ?? null;
               setFile(nextFile);

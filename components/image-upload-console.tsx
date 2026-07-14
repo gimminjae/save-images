@@ -13,7 +13,7 @@ import {
 import { MEMORY_OBJECT_ROOT } from "@/lib/memories/shared";
 import { getFileStemName } from "@/lib/utils";
 import {
-  ACCEPTED_IMAGE_TYPES,
+  ACCEPTED_IMAGE_INPUT_ACCEPT,
   MAX_IMAGE_FILE_SIZE,
   validateCreateMemoryInput,
 } from "@/lib/validations/memory";
@@ -376,7 +376,7 @@ export function ImageUploadConsole({
           <input
             type="file"
             multiple
-            accept={ACCEPTED_IMAGE_TYPES.join(",")}
+            accept={ACCEPTED_IMAGE_INPUT_ACCEPT}
             disabled={isUploading || categories.length === 0}
             onChange={(event) => {
               const files = event.target.files;
