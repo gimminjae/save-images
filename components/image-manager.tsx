@@ -3,7 +3,17 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { readJson } from "@/lib/api-client";
 import { readImageDimensions } from "@/lib/browser-images";
+import {
+  isRecoverableDirectUploadError,
+  requestPresignedUpload,
+  uploadFileToPresignedUrl,
+} from "@/lib/direct-upload-client";
+import {
+  ACCEPTED_IMAGE_TYPES,
+  MAX_NAME_LENGTH,
+} from "@/lib/validations/memory";
 import type { CategoryRecord } from "@/types/category";
 import type { MemoryRecord } from "@/types/memory";
 
@@ -41,6 +51,10 @@ function ImageManagerCard({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [saveStage, setSaveStage] = useState<
+    "idle" | "uploading" | "saving"
+  >("idle");
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const isBusy = isSaving || isDeleting;
@@ -57,34 +71,106 @@ function ImageManagerCard({
     event.preventDefault();
 
     setIsSaving(true);
+    setSaveStage(file ? "uploading" : "saving");
+    setUploadProgress(file ? 0 : 100);
     setErrorMessage(null);
     setSuccessMessage(null);
 
     try {
-      const payload = new FormData();
-      payload.append("name", name);
-      payload.append("categoryId", categoryId);
-      payload.append("isVisible", String(isVisible));
-      payload.append("isCategoryFeatured", String(isCategoryFeatured));
-      payload.append("isMainFeatured", String(isMainFeatured));
+      const payload: Record<string, unknown> = {
+        name,
+        categoryId,
+        isVisible,
+        isCategoryFeatured,
+        isMainFeatured,
+      };
 
       if (file) {
         const { width, height } = await readImageDimensions(file);
-        payload.append("image", file);
-        payload.append("imageWidth", String(width));
-        payload.append("imageHeight", String(height));
+        try {
+          const presignedUpload = await requestPresignedUpload(
+            "/api/admin/memories/presign",
+            file,
+          );
+
+          await uploadFileToPresignedUrl({
+            file,
+            headers: presignedUpload.headers,
+            uploadUrl: presignedUpload.uploadUrl,
+            onProgress: (progress) => {
+              setSaveStage("uploading");
+              setUploadProgress(progress);
+            },
+          });
+
+          payload.imageHeight = height;
+          payload.imageKey = presignedUpload.fileKey;
+          payload.imageUrl = presignedUpload.publicUrl;
+          payload.imageWidth = width;
+          payload.uploadToken = presignedUpload.uploadToken;
+        } catch (directUploadError) {
+          if (!isRecoverableDirectUploadError(directUploadError)) {
+            throw directUploadError;
+          }
+
+          const fallbackPayload = new FormData();
+          fallbackPayload.append("name", name);
+          fallbackPayload.append("categoryId", categoryId);
+          fallbackPayload.append("isVisible", String(isVisible));
+          fallbackPayload.append(
+            "isCategoryFeatured",
+            String(isCategoryFeatured),
+          );
+          fallbackPayload.append("isMainFeatured", String(isMainFeatured));
+          fallbackPayload.append("image", file);
+          fallbackPayload.append("imageWidth", String(width));
+          fallbackPayload.append("imageHeight", String(height));
+
+          const fallbackResponse = await fetch(
+            `/api/admin/memories/${memory.id}`,
+            {
+              method: "PATCH",
+              body: fallbackPayload,
+            },
+          );
+          const fallbackResult = (await fallbackResponse.json()) as {
+            error?: string;
+            memory?: MemoryRecord;
+          };
+
+          if (!fallbackResponse.ok || !fallbackResult.memory) {
+            throw new Error(fallbackResult.error || "수정에 실패했어요.");
+          }
+
+          onUpdated(fallbackResult.memory);
+          setSuccessMessage("이미지를 저장했어요.");
+          setFile(null);
+          setPreviewUrl((currentPreviewUrl) => {
+            if (currentPreviewUrl) {
+              URL.revokeObjectURL(currentPreviewUrl);
+            }
+
+            return null;
+          });
+          return;
+        }
       }
 
-      const response = await fetch(`/api/admin/memories/${memory.id}`, {
-        method: "PATCH",
-        body: payload,
-      });
-      const result = (await response.json()) as {
+      setSaveStage("saving");
+      setUploadProgress(100);
+
+      const result = await readJson<{
         error?: string;
         memory?: MemoryRecord;
-      };
+      }>(`/api/admin/memories/${memory.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
 
-      if (!response.ok || !result.memory) {
+      if (!result.memory) {
         throw new Error(result.error || "수정에 실패했어요.");
       }
 
@@ -104,6 +190,8 @@ function ImageManagerCard({
       );
     } finally {
       setIsSaving(false);
+      setSaveStage("idle");
+      setUploadProgress(0);
     }
   }
 
@@ -173,6 +261,7 @@ function ImageManagerCard({
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
+            maxLength={MAX_NAME_LENGTH}
             className="event-input h-[48px] rounded-[16px] px-4 text-sm text-slate-900 outline-none"
           />
         </label>
@@ -198,7 +287,7 @@ function ImageManagerCard({
           <span className="text-sm font-black text-slate-900">이미지 교체</span>
           <input
             type="file"
-            accept="image/jpeg,image/png,image/webp"
+            accept={ACCEPTED_IMAGE_TYPES.join(",")}
             onChange={(event) => {
               const nextFile = event.target.files?.[0] ?? null;
               setFile(nextFile);
@@ -213,6 +302,27 @@ function ImageManagerCard({
             className="event-input block w-full rounded-[16px] px-4 py-3 text-sm text-slate-700 file:mr-3 file:rounded-full file:border-0 file:bg-sky-500 file:px-4 file:py-2.5 file:text-sm file:font-black file:text-white"
           />
         </label>
+
+        {file ? (
+          <div className="rounded-[18px] border border-sky-200/80 bg-sky-50/80 px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-sm font-black text-slate-900">
+              <span>
+                {saveStage === "uploading"
+                  ? "S3 직접 업로드 중"
+                  : saveStage === "saving"
+                    ? "메타데이터 저장 중"
+                    : "새 이미지 대기 중"}
+              </span>
+              <span className="text-sky-700">{uploadProgress}%</span>
+            </div>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-sky-100">
+              <div
+                className="h-full rounded-full bg-sky-400 transition-[width] duration-300"
+                style={{ width: `${uploadProgress}%` }}
+              />
+            </div>
+          </div>
+        ) : null}
 
         <div className="grid gap-3 md:grid-cols-3">
           <label className="flex items-center gap-3 rounded-[18px] border border-sky-200/80 bg-sky-50/70 px-4 py-3 text-sm font-black text-slate-900">
@@ -270,7 +380,11 @@ function ImageManagerCard({
             disabled={isBusy || !name.trim() || !categoryId}
             className="event-button-primary inline-flex h-11 items-center justify-center rounded-full px-5 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isSaving ? "저장 중..." : "저장"}
+            {isSaving
+              ? saveStage === "uploading"
+                ? "직접 업로드 중..."
+                : "저장 중..."
+              : "저장"}
           </button>
         </div>
       </form>

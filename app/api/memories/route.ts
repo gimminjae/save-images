@@ -2,14 +2,20 @@ import { NextResponse } from "next/server";
 import {
   createMemoryObjectKey,
   deleteMemoryObject,
+  getPublicAssetUrl,
   uploadMemoryObject,
+  verifyUploadToken,
 } from "@/lib/aws/s3";
 import {
   getMissingSupabasePublicEnv,
   getMissingStorageEnv,
 } from "@/lib/env";
 import { getCategoryById } from "@/lib/supabase/categories";
-import { createMemory, listPublishedMemories } from "@/lib/supabase/memories";
+import {
+  createMemory,
+  listAllMemories,
+  listPublishedMemories,
+} from "@/lib/supabase/memories";
 import { getFileStemName } from "@/lib/utils";
 import {
   getImageExtension,
@@ -18,6 +24,25 @@ import {
 } from "@/lib/validations/memory";
 
 export const runtime = "nodejs";
+
+function readNumber(value: FormDataEntryValue | unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+
+  return undefined;
+}
+
+async function assertCategoryExists(categoryId: string) {
+  if (!(await getCategoryById(categoryId))) {
+    throw new Error("선택한 카테고리를 찾지 못했어요.");
+  }
+}
 
 export async function GET(request: Request) {
   const missingEnvVars = getMissingSupabasePublicEnv();
@@ -36,10 +61,21 @@ export async function GET(request: Request) {
     const limitValue = Number(url.searchParams.get("limit") ?? "500");
     const limit =
       Number.isFinite(limitValue) && limitValue > 0
-        ? Math.min(limitValue, 500)
+        ? Math.min(limitValue, 1000)
         : 500;
+    const mainFeatured = url.searchParams.get("mainFeatured") === "true";
+    const categoryFeatured =
+      url.searchParams.get("categoryFeatured") === "true";
 
-    const memories = await listPublishedMemories(limit);
+    const memories =
+      mainFeatured || categoryFeatured
+        ? await listAllMemories({
+            limit,
+            onlyVisible: true,
+            onlyMainFeatured: mainFeatured,
+            onlyCategoryFeatured: categoryFeatured,
+          })
+        : await listPublishedMemories(limit);
     return NextResponse.json({ memories });
   } catch (error) {
     console.error("Failed to list memories", error);
@@ -71,6 +107,99 @@ export async function POST(request: Request) {
   let uploadedFileKey: string | null = null;
 
   try {
+    const requestContentType = request.headers.get("content-type") ?? "";
+
+    if (requestContentType.includes("application/json")) {
+      const payload = (await request.json()) as {
+        categoryId?: unknown;
+        department?: unknown;
+        description?: unknown;
+        imageHeight?: unknown;
+        imageKey?: unknown;
+        imageUrl?: unknown;
+        imageWidth?: unknown;
+        isCategoryFeatured?: unknown;
+        isMainFeatured?: unknown;
+        isVisible?: unknown;
+        name?: unknown;
+        nickname?: unknown;
+        uploadToken?: unknown;
+      };
+      const uploadToken =
+        typeof payload.uploadToken === "string" ? payload.uploadToken : "";
+
+      if (!uploadToken) {
+        return NextResponse.json(
+          {
+            error: "업로드 인증 정보가 없어요. 다시 업로드를 시작해 주세요.",
+          },
+          { status: 400 },
+        );
+      }
+
+      const verifiedUpload = verifyUploadToken(uploadToken);
+      const expectedImageUrl = getPublicAssetUrl(verifiedUpload.fileKey);
+      uploadedFileKey = verifiedUpload.fileKey;
+
+      if (
+        typeof payload.imageKey === "string" &&
+        payload.imageKey !== verifiedUpload.fileKey
+      ) {
+        return NextResponse.json(
+          {
+            error: "업로드 이미지 정보가 일치하지 않아요.",
+          },
+          { status: 400 },
+        );
+      }
+
+      if (
+        typeof payload.imageUrl === "string" &&
+        payload.imageUrl !== expectedImageUrl
+      ) {
+        return NextResponse.json(
+          {
+            error: "업로드 이미지 주소가 일치하지 않아요.",
+          },
+          { status: 400 },
+        );
+      }
+
+      const categoryId =
+        typeof payload.categoryId === "string" ? payload.categoryId.trim() : "";
+
+      if (!categoryId) {
+        return NextResponse.json(
+          {
+            error: "카테고리를 선택해 주세요.",
+          },
+          { status: 400 },
+        );
+      }
+
+      await assertCategoryExists(categoryId);
+
+      const memory = await createMemory(
+        validateCreateMemoryInput({
+          name: payload.name,
+          nickname: payload.nickname,
+          department: payload.department,
+          description: payload.description,
+          categoryId,
+          imageUrl: expectedImageUrl,
+          imageKey: verifiedUpload.fileKey,
+          imageWidth: readNumber(payload.imageWidth),
+          imageHeight: readNumber(payload.imageHeight),
+          isVisible: payload.isVisible,
+          isCategoryFeatured: payload.isCategoryFeatured,
+          isMainFeatured: payload.isMainFeatured,
+        }),
+      );
+
+      uploadedFileKey = null;
+      return NextResponse.json({ memory }, { status: 201 });
+    }
+
     const formData = await request.formData();
     const file = formData.get("image");
     const nickname = formData.get("nickname");
@@ -97,14 +226,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!(await getCategoryById(categoryId))) {
-      return NextResponse.json(
-        {
-          error: "선택한 카테고리를 찾지 못했어요.",
-        },
-        { status: 404 },
-      );
-    }
+    await assertCategoryExists(categoryId);
 
     const validatedFile = validateImageUploadInput({
       fileName: file.name,
@@ -146,14 +268,11 @@ export async function POST(request: Request) {
       imageUrl: publicUrl,
       imageKey: fileKey,
       categoryId,
-      imageWidth:
-        typeof imageWidthValue === "string" ? Number(imageWidthValue) : undefined,
-      imageHeight:
-        typeof imageHeightValue === "string"
-          ? Number(imageHeightValue)
-          : undefined,
+      imageWidth: readNumber(imageWidthValue),
+      imageHeight: readNumber(imageHeightValue),
     });
     const memory = await createMemory(payload);
+    uploadedFileKey = null;
 
     return NextResponse.json({ memory }, { status: 201 });
   } catch (error) {

@@ -18,6 +18,19 @@ export type RequiredServerEnvKey =
   | RequiredSupabaseEnvKey
   | RequiredStorageEnvKey;
 
+const ENV_SNAPSHOT = {
+  NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+  NEXT_PUBLIC_AWS_REGION: process.env.NEXT_PUBLIC_AWS_REGION,
+  NEXT_PUBLIC_AWS_S3_BUCKET_NAME: process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME,
+  NEXT_PUBLIC_AWS_ACCESS_KEY_ID: process.env.NEXT_PUBLIC_AWS_ACCESS_KEY_ID,
+  NEXT_PUBLIC_AWS_SECRET_ACCESS_KEY:
+    process.env.NEXT_PUBLIC_AWS_SECRET_ACCESS_KEY,
+  NEXT_PUBLIC_AWS_S3_PUBLIC_BASE_URL:
+    process.env.NEXT_PUBLIC_AWS_S3_PUBLIC_BASE_URL,
+} as const;
+
 export type ServerEnv = {
   supabasePublishableKey: string;
   supabaseUrl: string;
@@ -30,7 +43,7 @@ export type ServerEnv = {
 
 function getMissingEnv<T extends readonly string[]>(keys: T) {
   return keys.filter((key) => {
-    const value = process.env[key];
+    const value = ENV_SNAPSHOT[key as keyof typeof ENV_SNAPSHOT];
 
     return typeof value !== "string" || value.trim().length === 0;
   }) as T[number][];
@@ -64,8 +77,8 @@ export function getSupabasePublicEnv() {
 
   return {
     supabasePublishableKey:
-      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!.trim(),
-    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL!.trim(),
+      ENV_SNAPSHOT.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!.trim(),
+    supabaseUrl: ENV_SNAPSHOT.NEXT_PUBLIC_SUPABASE_URL!.trim(),
   };
 }
 
@@ -79,12 +92,13 @@ export function getStorageEnv() {
   }
 
   return {
-    awsAccessKeyId: process.env.NEXT_PUBLIC_AWS_ACCESS_KEY_ID!.trim(),
-    awsRegion: process.env.NEXT_PUBLIC_AWS_REGION!.trim(),
-    awsS3BucketName: process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME!.trim(),
+    awsAccessKeyId: ENV_SNAPSHOT.NEXT_PUBLIC_AWS_ACCESS_KEY_ID!.trim(),
+    awsRegion: ENV_SNAPSHOT.NEXT_PUBLIC_AWS_REGION!.trim(),
+    awsS3BucketName: ENV_SNAPSHOT.NEXT_PUBLIC_AWS_S3_BUCKET_NAME!.trim(),
     awsS3PublicBaseUrl:
-      process.env.NEXT_PUBLIC_AWS_S3_PUBLIC_BASE_URL?.trim() || null,
-    awsSecretAccessKey: process.env.NEXT_PUBLIC_AWS_SECRET_ACCESS_KEY!.trim(),
+      ENV_SNAPSHOT.NEXT_PUBLIC_AWS_S3_PUBLIC_BASE_URL?.trim() || null,
+    awsSecretAccessKey:
+      ENV_SNAPSHOT.NEXT_PUBLIC_AWS_SECRET_ACCESS_KEY!.trim(),
   };
 }
 

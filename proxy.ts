@@ -42,7 +42,8 @@ export function proxy(request: NextRequest) {
   const managePassword = process.env.MANAGE_ACCESS_PASSWORD;
 
   const isUploadWrite =
-    pathname === "/api/memories" && request.method !== "GET";
+    (pathname === "/api/memories" || pathname === "/api/memories/presign") &&
+    request.method !== "GET";
   const isManageWrite =
     pathname.startsWith("/api/admin/") ||
     (pathname.startsWith("/api/categories") && request.method !== "GET");

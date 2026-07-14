@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: "Myeongwon";
+  src: url("https://cdn.jsdelivr.net/gh/Project-Noonnu/2607131254@4/4/Hangeuljaemin4-RegularI.woff2")
+    format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+
 :root {
   --background: #a9f0f4;
   --foreground: #16304d;
@@ -25,6 +33,7 @@
   --color-accent-soft: var(--accent-soft);
   --color-line: var(--line);
   --font-sans:
+    "Myeongwon",
     "SUIT",
     "Pretendard",
     "Noto Sans KR",
@@ -43,6 +52,7 @@
 }
 
 html {
+  font-family: var(--font-sans);
   background:
     radial-gradient(circle at top, rgba(255, 255, 255, 0.5), transparent 35%),
     linear-gradient(180deg, #bdf8ff 0%, #97ebf6 48%, #bdf9f5 100%);
@@ -55,6 +65,7 @@ body {
     linear-gradient(180deg, #bdf8ff 0%, #97ebf6 48%, #bdf9f5 100%);
   color: var(--foreground);
   font-family: var(--font-sans);
+  text-rendering: optimizeLegibility;
 }
 
 a {

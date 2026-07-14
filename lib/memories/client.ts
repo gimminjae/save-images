@@ -1,27 +1,7 @@
 "use client";
 
+import { fetchPublishedMemories, isAbortError } from "@/lib/api-client";
 import type { MemoryRecord } from "@/types/memory";
-
-type PublishedMemoriesResponse = {
-  memories?: MemoryRecord[];
-  error?: string;
-};
-
-async function fetchPublishedMemories(signal?: AbortSignal) {
-  const response = await fetch("/api/memories", {
-    cache: "no-store",
-    signal,
-  });
-  const payload = (await response.json().catch(() => null)) as
-    | PublishedMemoriesResponse
-    | null;
-
-  if (!response.ok) {
-    throw new Error(payload?.error || "전시 이미지를 새로고침하지 못했어요.");
-  }
-
-  return Array.isArray(payload?.memories) ? payload.memories : [];
-}
 
 export function subscribeToPublishedMemories(
   onChange: (memories: MemoryRecord[]) => void,
@@ -36,13 +16,15 @@ export function subscribeToPublishedMemories(
     activeController = new AbortController();
 
     try {
-      const memories = await fetchPublishedMemories(activeController.signal);
+      const memories = await fetchPublishedMemories({
+        signal: activeController.signal,
+      });
 
       if (active) {
         onChange(memories);
       }
     } catch (error) {
-      if (active) {
+      if (active && !isAbortError(error)) {
         onError(
           error instanceof Error
             ? error

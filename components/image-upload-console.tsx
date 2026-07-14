@@ -2,9 +2,14 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { startTransition, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { readJson } from "@/lib/api-client";
 import { readImageDimensions } from "@/lib/browser-images";
+import {
+  isRecoverableDirectUploadError,
+  requestPresignedUpload,
+  uploadFileToPresignedUrl,
+} from "@/lib/direct-upload-client";
 import { MEMORY_OBJECT_ROOT } from "@/lib/memories/shared";
 import { getFileStemName } from "@/lib/utils";
 import {
@@ -19,41 +24,65 @@ type ImageUploadConsoleProps = {
 };
 
 type UploadEntry = {
-  id: string;
+  errorMessage: string | null;
   file: File;
-  name: string;
-  categoryId: string;
+  id: string;
   imageHeight: number | null;
   imageWidth: number | null;
+  name: string;
   previewUrl: string;
-  status: "idle" | "uploading" | "success" | "error";
-  errorMessage: string | null;
+  progress: number;
+  status: "idle" | "preparing" | "uploading" | "saving" | "success" | "error";
 };
 
-const MAX_PARALLEL_UPLOADS = 3;
+type CreateMemoryResponse = {
+  error?: string;
+};
 
-function getApiErrorMessage(payload: unknown, fallbackMessage: string) {
-  if (
-    payload &&
-    typeof payload === "object" &&
-    "error" in payload &&
-    typeof payload.error === "string"
-  ) {
-    return payload.error;
+const MAX_PARALLEL_UPLOADS = 4;
+
+function getEntryStatusLabel(status: UploadEntry["status"]) {
+  switch (status) {
+    case "preparing":
+      return "준비 중";
+    case "uploading":
+      return "S3 업로드 중";
+    case "saving":
+      return "저장 중";
+    case "success":
+      return "완료";
+    case "error":
+      return "실패";
+    default:
+      return "대기";
   }
+}
 
-  return fallbackMessage;
+function getEntryStatusClass(status: UploadEntry["status"]) {
+  switch (status) {
+    case "preparing":
+    case "uploading":
+    case "saving":
+      return "bg-sky-100 text-sky-700";
+    case "success":
+      return "bg-emerald-100 text-emerald-700";
+    case "error":
+      return "bg-rose-100 text-rose-700";
+    default:
+      return "bg-slate-200 text-slate-600";
+  }
 }
 
 export function ImageUploadConsole({
   categories,
 }: ImageUploadConsoleProps) {
-  const router = useRouter();
   const [entries, setEntries] = useState<UploadEntry[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const defaultCategoryId = categories[0]?.id ?? "";
+  const [selectedCategoryId, setSelectedCategoryId] = useState(
+    categories[0]?.id ?? "",
+  );
   const entriesRef = useRef<UploadEntry[]>([]);
 
   useEffect(() => {
@@ -72,16 +101,29 @@ export function ImageUploadConsole({
     () => entries.filter((entry) => entry.status === "success").length,
     [entries],
   );
+  const activeCount = useMemo(
+    () =>
+      entries.filter((entry) =>
+        ["preparing", "uploading", "saving"].includes(entry.status),
+      ).length,
+    [entries],
+  );
+  const effectiveCategoryId = selectedCategoryId || categories[0]?.id || "";
+  const selectedCategory = useMemo(
+    () =>
+      categories.find((category) => category.id === effectiveCategoryId) ?? null,
+    [categories, effectiveCategoryId],
+  );
 
   function appendFiles(files: FileList | File[]) {
     const nextEntries = Array.from(files).map<UploadEntry>((file) => ({
       id: `${file.name}-${file.size}-${crypto.randomUUID()}`,
       file,
       name: getFileStemName(file.name),
-      categoryId: defaultCategoryId,
       imageHeight: null,
       imageWidth: null,
       previewUrl: URL.createObjectURL(file),
+      progress: 0,
       status: "idle",
       errorMessage: null,
     }));
@@ -120,9 +162,10 @@ export function ImageUploadConsole({
     return { width, height };
   }
 
-  async function uploadEntry(entry: UploadEntry) {
+  async function uploadEntry(entry: UploadEntry, categoryId: string) {
     patchEntry(entry.id, {
-      status: "uploading",
+      status: "preparing",
+      progress: 4,
       errorMessage: null,
     });
 
@@ -131,32 +174,88 @@ export function ImageUploadConsole({
 
       validateCreateMemoryInput({
         name: entry.name,
-        categoryId: entry.categoryId,
+        categoryId,
         imageUrl: "https://placeholder.local",
         imageKey: `${MEMORY_OBJECT_ROOT}/placeholder.jpg`,
         imageWidth: width,
         imageHeight: height,
       });
 
-      const payload = new FormData();
-      payload.append("name", entry.name);
-      payload.append("categoryId", entry.categoryId);
-      payload.append("image", entry.file);
-      payload.append("imageWidth", String(width));
-      payload.append("imageHeight", String(height));
+      try {
+        const presignedUpload = await requestPresignedUpload(
+          "/api/memories/presign",
+          entry.file,
+        );
 
-      const response = await fetch("/api/memories", {
-        method: "POST",
-        body: payload,
-      });
-      const result = (await response.json()) as { error?: string };
+        patchEntry(entry.id, {
+          status: "uploading",
+          progress: 8,
+        });
 
-      if (!response.ok) {
-        throw new Error(getApiErrorMessage(result, "업로드에 실패했어요."));
+        await uploadFileToPresignedUrl({
+          file: entry.file,
+          headers: presignedUpload.headers,
+          uploadUrl: presignedUpload.uploadUrl,
+          onProgress: (progress) => {
+            patchEntry(entry.id, {
+              status: "uploading",
+              progress,
+            });
+          },
+        });
+
+        patchEntry(entry.id, {
+          status: "saving",
+          progress: 100,
+        });
+
+        await readJson<CreateMemoryResponse>("/api/memories", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            categoryId,
+            imageHeight: height,
+            imageKey: presignedUpload.fileKey,
+            imageUrl: presignedUpload.publicUrl,
+            imageWidth: width,
+            name: entry.name,
+            uploadToken: presignedUpload.uploadToken,
+          }),
+        });
+      } catch (directUploadError) {
+        if (!isRecoverableDirectUploadError(directUploadError)) {
+          throw directUploadError;
+        }
+
+        patchEntry(entry.id, {
+          status: "saving",
+          progress: 35,
+          errorMessage: null,
+        });
+
+        const payload = new FormData();
+        payload.append("name", entry.name);
+        payload.append("categoryId", categoryId);
+        payload.append("image", entry.file);
+        payload.append("imageWidth", String(width));
+        payload.append("imageHeight", String(height));
+
+        const response = await fetch("/api/memories", {
+          method: "POST",
+          body: payload,
+        });
+        const result = (await response.json()) as { error?: string };
+
+        if (!response.ok) {
+          throw new Error(result.error || "업로드에 실패했어요.");
+        }
       }
 
       patchEntry(entry.id, {
         status: "success",
+        progress: 100,
         errorMessage: null,
         imageWidth: width,
         imageHeight: height,
@@ -166,6 +265,7 @@ export function ImageUploadConsole({
     } catch (uploadError) {
       patchEntry(entry.id, {
         status: "error",
+        progress: 0,
         errorMessage:
           uploadError instanceof Error
             ? uploadError.message
@@ -182,12 +282,13 @@ export function ImageUploadConsole({
       return;
     }
 
-    const uploadTargets = entries.filter((entry) => entry.status !== "success");
-
-    if (uploadTargets.some((entry) => entry.categoryId.trim().length === 0)) {
-      setError("모든 이미지에 카테고리를 선택해 주세요.");
+    if (!effectiveCategoryId.trim()) {
+      setError("상단에서 업로드할 카테고리를 먼저 선택해 주세요.");
       return;
     }
+
+    const uploadTargets = entries.filter((entry) => entry.status !== "success");
+    const uploadCategoryId = effectiveCategoryId;
 
     setIsUploading(true);
     setError(null);
@@ -207,7 +308,7 @@ export function ImageUploadConsole({
             break;
           }
 
-          const didSucceed = await uploadEntry(nextEntry);
+          const didSucceed = await uploadEntry(nextEntry, uploadCategoryId);
 
           if (didSucceed) {
             successCount += 1;
@@ -221,15 +322,37 @@ export function ImageUploadConsole({
     setIsUploading(false);
 
     if (failureCount === 0 && successCount === entries.length) {
-      setMessage("모든 이미지 업로드가 완료됐어요.");
-      startTransition(() => {
-        router.push("/");
-        router.refresh();
-      });
+      setMessage(
+        "모든 이미지 업로드가 완료됐어요. 상단에서 선택한 카테고리로 한 번에 저장했어요.",
+      );
       return;
     }
 
     setError("일부 이미지 업로드에 실패했어요. 실패한 항목만 다시 시도할 수 있어요.");
+  }
+
+  function removeEntry(entryId: string) {
+    setEntries((current) => {
+      const target = current.find((item) => item.id === entryId);
+
+      if (target) {
+        URL.revokeObjectURL(target.previewUrl);
+      }
+
+      return current.filter((item) => item.id !== entryId);
+    });
+  }
+
+  function clearCompletedEntries() {
+    setEntries((current) => {
+      current
+        .filter((entry) => entry.status === "success")
+        .forEach((entry) => {
+          URL.revokeObjectURL(entry.previewUrl);
+        });
+
+      return current.filter((entry) => entry.status !== "success");
+    });
   }
 
   return (
@@ -238,35 +361,60 @@ export function ImageUploadConsole({
         <h1 className="text-3xl font-black tracking-[-0.05em] text-slate-950 sm:text-4xl">
           이미지 업로드
         </h1>
-        <span className="rounded-full bg-white/85 px-4 py-2 text-sm font-black text-sky-950">
-          완료 {completedCount}/{entries.length}
-        </span>
+        <div className="flex flex-wrap gap-2">
+          <span className="rounded-full bg-white/85 px-4 py-2 text-sm font-black text-sky-950">
+            진행 {activeCount}장
+          </span>
+          <span className="rounded-full bg-white/85 px-4 py-2 text-sm font-black text-sky-950">
+            완료 {completedCount}/{entries.length}
+          </span>
+        </div>
       </div>
 
       <div className="mt-5 rounded-[26px] border border-sky-200/70 bg-white/75 p-4">
-        <input
-          type="file"
-          multiple
-          accept={ACCEPTED_IMAGE_TYPES.join(",")}
-          disabled={isUploading || categories.length === 0}
-          onChange={(event) => {
-            const files = event.target.files;
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_240px]">
+          <input
+            type="file"
+            multiple
+            accept={ACCEPTED_IMAGE_TYPES.join(",")}
+            disabled={isUploading || categories.length === 0}
+            onChange={(event) => {
+              const files = event.target.files;
 
-            if (!files || files.length === 0) {
-              return;
-            }
+              if (!files || files.length === 0) {
+                return;
+              }
 
-            appendFiles(files);
-            event.target.value = "";
-          }}
-          className="block w-full text-sm text-slate-700 file:mr-3 file:rounded-full file:border-0 file:bg-sky-500 file:px-4 file:py-2.5 file:text-sm file:font-black file:text-white"
-        />
-      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-bold text-slate-500">
-        <span>최대 {Math.floor(MAX_IMAGE_FILE_SIZE / (1024 * 1024))}MB</span>
-        <span>동시에 최대 {MAX_PARALLEL_UPLOADS}장 업로드</span>
-        <span className="rounded-full bg-sky-100 px-2.5 py-1 text-sky-700">
-          JPG / PNG / WEBP
-        </span>
+              appendFiles(files);
+              event.target.value = "";
+            }}
+            className="block w-full text-sm text-slate-700 file:mr-3 file:rounded-full file:border-0 file:bg-sky-500 file:px-4 file:py-2.5 file:text-sm file:font-black file:text-white"
+          />
+          <select
+            value={effectiveCategoryId}
+            onChange={(event) => setSelectedCategoryId(event.target.value)}
+            disabled={isUploading || categories.length === 0}
+            className="event-input h-[48px] rounded-[16px] px-4 text-sm font-black text-slate-900 outline-none"
+          >
+            <option value="">업로드 카테고리 선택</option>
+            {categories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {"· ".repeat(category.depth)}
+                {category.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-bold text-slate-500">
+          <span>최대 {Math.floor(MAX_IMAGE_FILE_SIZE / (1024 * 1024))}MB</span>
+          <span>동시에 최대 {MAX_PARALLEL_UPLOADS}장 업로드</span>
+          <span>브라우저에서 S3로 직접 전송</span>
+          <span>
+            현재 카테고리: {selectedCategory ? selectedCategory.name : "미선택"}
+          </span>
+          <span className="rounded-full bg-sky-100 px-2.5 py-1 text-sky-700">
+            JPG / PNG / WEBP
+          </span>
         </div>
       </div>
 
@@ -319,59 +467,44 @@ export function ImageUploadConsole({
                     className="event-input h-[48px] rounded-[16px] px-4 text-sm text-slate-900 outline-none"
                   />
                 </label>
-
-                <label className="grid gap-2">
-                  <span className="text-sm font-black text-slate-900">
-                    카테고리
-                  </span>
-                  <select
-                    value={entry.categoryId}
-                    onChange={(event) =>
-                      setEntries((current) =>
-                        current.map((item) =>
-                          item.id === entry.id
-                            ? { ...item, categoryId: event.target.value }
-                            : item,
-                        ),
-                      )
-                    }
-                    disabled={isUploading}
-                    className="event-input h-[48px] rounded-[16px] px-4 text-sm text-slate-900 outline-none"
-                  >
-                    <option value="">카테고리 선택</option>
-                    {categories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {"· ".repeat(category.depth)}
-                        {category.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
               </div>
 
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-slate-700">
                   {entry.file.name}
                 </span>
+                {selectedCategory ? (
+                  <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-black text-sky-700">
+                    {selectedCategory.name}
+                  </span>
+                ) : null}
                 <span
-                  className={`rounded-full px-3 py-1 text-xs font-black ${
-                    entry.status === "success"
-                      ? "bg-emerald-100 text-emerald-700"
-                      : entry.status === "error"
-                        ? "bg-rose-100 text-rose-700"
-                        : entry.status === "uploading"
-                          ? "bg-sky-100 text-sky-700"
-                          : "bg-slate-200 text-slate-600"
-                  }`}
+                  className={`rounded-full px-3 py-1 text-xs font-black ${getEntryStatusClass(entry.status)}`}
                 >
-                  {entry.status === "success"
-                    ? "완료"
-                    : entry.status === "error"
-                      ? "실패"
-                      : entry.status === "uploading"
-                        ? "업로드 중"
-                        : "대기"}
+                  {getEntryStatusLabel(entry.status)}
                 </span>
+                {(entry.status === "uploading" ||
+                  entry.status === "saving" ||
+                  entry.status === "success") && (
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">
+                    {entry.progress}%
+                  </span>
+                )}
+              </div>
+
+              <div className="mt-3">
+                <div className="h-2 overflow-hidden rounded-full bg-slate-200/80">
+                  <div
+                    className={`h-full rounded-full transition-[width] duration-300 ${
+                      entry.status === "error"
+                        ? "bg-rose-400"
+                        : entry.status === "success"
+                          ? "bg-emerald-400"
+                          : "bg-sky-400"
+                    }`}
+                    style={{ width: `${entry.progress}%` }}
+                  />
+                </div>
               </div>
 
               {entry.errorMessage ? (
@@ -384,17 +517,7 @@ export function ImageUploadConsole({
                 <button
                   type="button"
                   disabled={isUploading}
-                  onClick={() =>
-                    setEntries((current) => {
-                      const target = current.find((item) => item.id === entry.id);
-
-                      if (target) {
-                        URL.revokeObjectURL(target.previewUrl);
-                      }
-
-                      return current.filter((item) => item.id !== entry.id);
-                    })
-                  }
+                  onClick={() => removeEntry(entry.id)}
                   className="inline-flex h-10 items-center justify-center rounded-full border border-rose-200 bg-rose-50 px-4 text-sm font-black text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   목록에서 제거
@@ -405,14 +528,27 @@ export function ImageUploadConsole({
         </div>
       )}
 
-      <div className="mt-5 flex justify-end">
+      <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+        <button
+          type="button"
+          onClick={clearCompletedEntries}
+          disabled={isUploading || completedCount === 0}
+          className="event-button-secondary inline-flex h-12 items-center justify-center rounded-full px-6 text-sm font-black text-sky-950 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          완료 항목 정리
+        </button>
         <button
           type="button"
           onClick={() => void handleUploadAll()}
-          disabled={isUploading || entries.length === 0 || categories.length === 0}
+          disabled={
+            isUploading ||
+            entries.length === 0 ||
+            categories.length === 0 ||
+            !effectiveCategoryId
+          }
           className="event-button-primary inline-flex h-12 items-center justify-center rounded-full px-6 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {isUploading ? "업로드 진행 중..." : "선택한 이미지 업로드"}
+          {isUploading ? "직접 업로드 진행 중..." : "선택한 이미지 빠르게 업로드"}
         </button>
       </div>
     </section>

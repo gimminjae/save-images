@@ -60,7 +60,7 @@ yarn dev
 
 ## 비밀번호 보호
 
-- `/upload` 와 `POST /api/memories` 는 `UPLOAD_ACCESS_PASSWORD` 로 보호됩니다.
+- `/upload`, `POST /api/memories`, `POST /api/memories/presign` 는 `UPLOAD_ACCESS_PASSWORD` 로 보호됩니다.
 - `/category`, `/images`, `/admin`, 관리자 수정/삭제 API, 카테고리 쓰기 API는 `MANAGE_ACCESS_PASSWORD` 로 보호됩니다.
 - 브라우저에서 접근할 때 Basic Auth 입력창으로 비밀번호를 받습니다.
 
@@ -78,10 +78,20 @@ yarn dev
 ## API
 
 - `GET /api/memories` : 공개 목록 조회
-- `POST /api/memories` : S3 업로드 후 Supabase 저장
+- `POST /api/memories/presign` : 브라우저 직접 S3 업로드용 presigned URL 발급
+- `POST /api/memories` : 업로드 완료된 이미지 메타데이터를 Supabase 저장
 - `GET /api/categories/tree` : 카테고리 트리 조회
 - `POST /api/categories` : 카테고리 생성
 - `PATCH /api/categories/:id` : 카테고리 수정
 - `DELETE /api/categories/:id` : 카테고리 삭제
+- `POST /api/admin/memories/presign` : 관리자 이미지 교체용 presigned URL 발급
 - `PATCH /api/admin/memories/:id` : 이름, 카테고리, 대표 이미지, 메인 노출, 이미지 파일 수정
 - `DELETE /api/admin/memories/:id` : 데이터와 S3 파일 삭제
+
+## S3 CORS
+
+직접 업로드를 쓰려면 S3 버킷 CORS에서 브라우저의 `PUT` 요청을 허용해야 합니다.
+
+- 허용 메서드: `PUT`, `GET`, `HEAD`
+- 허용 헤더: `Content-Type`, `Cache-Control`
+- 허용 Origin: 실제 서비스 도메인과 로컬 개발 도메인

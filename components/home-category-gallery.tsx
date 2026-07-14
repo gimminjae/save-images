@@ -69,6 +69,24 @@ export function HomeCategoryGallery({
   );
   const [isSwitching, setIsSwitching] = useState(false);
   const swapTimeoutRef = useRef<number | null>(null);
+  const lastSyncedCategoryIdRef = useRef(initialSelectedCategoryId);
+
+  useEffect(() => {
+    if (lastSyncedCategoryIdRef.current === initialSelectedCategoryId) {
+      return;
+    }
+
+    lastSyncedCategoryIdRef.current = initialSelectedCategoryId;
+
+    if (swapTimeoutRef.current !== null) {
+      window.clearTimeout(swapTimeoutRef.current);
+      swapTimeoutRef.current = null;
+    }
+
+    setSelectedCategoryId(initialSelectedCategoryId);
+    setVisibleCategoryId(initialSelectedCategoryId);
+    setIsSwitching(false);
+  }, [initialSelectedCategoryId]);
 
   const primaryCategories = useMemo(
     () =>
