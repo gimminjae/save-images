@@ -47,9 +47,9 @@ export default function DownloadPage() {
   }, [missingEnvVars]);
 
   return (
-    <main className="relative min-h-screen overflow-hidden px-3 py-3 sm:px-6 sm:py-6">
+    <main className="relative min-h-screen overflow-hidden px-4 py-4 sm:px-6 sm:py-6">
       <EventSceneBackdrop />
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 sm:gap-5">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
         {missingEnvVars.length > 0 ? (
           <ConfigurationNotice missingKeys={missingEnvVars} />
         ) : loadError ? (
