@@ -54,8 +54,12 @@ export default function Home() {
       signal: controller.signal,
     })
       .then((loadedMainFeatured) => {
+        const nextMainFeatured = loadedMainFeatured.filter(
+          (memory) => memory.isMainFeatured,
+        );
+
         startTransition(() => {
-          setMainFeatured(loadedMainFeatured);
+          setMainFeatured(nextMainFeatured);
           setIsLoading(false);
         });
       })

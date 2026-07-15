@@ -30,7 +30,10 @@ export function HomeCategoryGallery({
   mainFeatured,
 }: HomeCategoryGalleryProps) {
   const displayMemories = useMemo(
-    () => shuffleMemories(mainFeatured),
+    () =>
+      shuffleMemories(
+        mainFeatured.filter((memory) => memory.isMainFeatured === true),
+      ),
     [mainFeatured],
   );
 

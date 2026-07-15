@@ -121,7 +121,7 @@ export async function fetchCategoryTree(signal?: AbortSignal) {
   }
 
   const payload = await readJson<CategoriesResponse>("/api/categories/tree", {
-    cache: "default",
+    cache: "no-store",
     signal,
   });
 
@@ -157,7 +157,7 @@ export async function fetchPublishedMemories(
   }
 
   const payload = await readJson<PublishedMemoriesResponse>(path, {
-    cache: "default",
+    cache: "no-store",
     signal: options?.signal,
   });
 
