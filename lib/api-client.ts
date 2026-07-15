@@ -178,7 +178,7 @@ export async function fetchMainGalleryMemories(signal?: AbortSignal) {
   const payload = await readJson<PublishedMemoriesResponse>(
     "/api/main-gallery",
     {
-      cache: "no-store",
+      cache: "force-cache",
       signal,
     },
   );

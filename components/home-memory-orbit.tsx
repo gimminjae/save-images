@@ -28,6 +28,11 @@ type SlotAssignment = {
   slot: OrbitSlot;
 };
 
+type LoadedImageMeta = {
+  height: number;
+  width: number;
+};
+
 const MAX_VISIBLE_MEMORIES = 15;
 const SHUFFLE_DURATION_MS = 820;
 const SLOT_SELECTION_ORDER = [0, 5, 10, 14, 6, 7, 12, 1, 4, 8, 9, 2, 3, 11, 13];
@@ -157,6 +162,10 @@ function getIncomingLayerClasses(showIncoming: boolean) {
   return "opacity-100 translate-y-0 scale-100 blur-0";
 }
 
+function getMemoryImageUrl(memory: MemoryRecord) {
+  return memory.thumbnailUrl ?? memory.imageUrl;
+}
+
 export function HomeMemoryOrbit({
   memories,
   isLoading = false,
@@ -166,6 +175,10 @@ export function HomeMemoryOrbit({
   const [hoveredAssignmentKey, setHoveredAssignmentKey] = useState<string | null>(
     null,
   );
+  const [isPreparingShuffle, setIsPreparingShuffle] = useState(false);
+  const [loadedImages, setLoadedImages] = useState<
+    Record<string, LoadedImageMeta>
+  >({});
   const [shuffleVersion, setShuffleVersion] = useState(0);
   const featuredMemories = useMemo(
     () => memories.filter((memory) => memory.isMainFeatured === true),
@@ -183,8 +196,100 @@ export function HomeMemoryOrbit({
     useState<SlotAssignment[] | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
   const [showIncoming, setShowIncoming] = useState(false);
+  const isMountedRef = useRef(true);
   const frameRef = useRef<number | null>(null);
+  const preloadPromisesRef = useRef<Map<string, Promise<void>>>(new Map());
+  const shuffleRequestRef = useRef(0);
   const timeoutRef = useRef<number | null>(null);
+  const loadedImagesRef = useRef<Record<string, LoadedImageMeta>>({});
+
+  const registerLoadedImage = useCallback(
+    (imageUrl: string, width: number, height: number) => {
+      if (!imageUrl || width <= 0 || height <= 0) {
+        return;
+      }
+
+      if (loadedImagesRef.current[imageUrl]) {
+        return;
+      }
+
+      const nextMeta = { width, height };
+      loadedImagesRef.current = {
+        ...loadedImagesRef.current,
+        [imageUrl]: nextMeta,
+      };
+
+      setLoadedImages((current) => {
+        if (current[imageUrl]) {
+          return current;
+        }
+
+        return {
+          ...current,
+          [imageUrl]: nextMeta,
+        };
+      });
+    },
+    [],
+  );
+
+  const preloadImage = useCallback(
+    (imageUrl: string) => {
+      if (!imageUrl || typeof window === "undefined") {
+        return Promise.resolve();
+      }
+
+      if (loadedImagesRef.current[imageUrl]) {
+        return Promise.resolve();
+      }
+
+      const existingPromise = preloadPromisesRef.current.get(imageUrl);
+
+      if (existingPromise) {
+        return existingPromise;
+      }
+
+      const promise = new Promise<void>((resolve) => {
+        const image = new window.Image();
+
+        image.decoding = "async";
+
+        const finalize = () => {
+          registerLoadedImage(
+            imageUrl,
+            image.naturalWidth || 0,
+            image.naturalHeight || 0,
+          );
+          preloadPromisesRef.current.delete(imageUrl);
+          resolve();
+        };
+
+        image.onload = () => {
+          if (typeof image.decode === "function") {
+            image.decode().then(finalize).catch(finalize);
+            return;
+          }
+
+          finalize();
+        };
+
+        image.onerror = () => {
+          preloadPromisesRef.current.delete(imageUrl);
+          resolve();
+        };
+
+        image.src = imageUrl;
+
+        if (image.complete && image.naturalWidth > 0) {
+          finalize();
+        }
+      });
+
+      preloadPromisesRef.current.set(imageUrl, promise);
+      return promise;
+    },
+    [registerLoadedImage],
+  );
 
   const clearScheduledShuffle = useCallback(() => {
     if (frameRef.current !== null) {
@@ -199,19 +304,34 @@ export function HomeMemoryOrbit({
   }, []);
 
   useEffect(() => {
+    isMountedRef.current = true;
+
     if (typeof window === "undefined") {
       return;
     }
 
     return () => {
+      isMountedRef.current = false;
+      shuffleRequestRef.current += 1;
       clearScheduledShuffle();
     };
   }, [clearScheduledShuffle]);
 
-  function handleShuffle() {
+  useEffect(() => {
+    if (isLoading || activeAssignments.length === 0) {
+      return;
+    }
+
+    activeAssignments.forEach((assignment) => {
+      void preloadImage(getMemoryImageUrl(assignment.memory));
+    });
+  }, [activeAssignments, isLoading, preloadImage]);
+
+  async function handleShuffle() {
     if (
       isLoading ||
       isAnimating ||
+      isPreparingShuffle ||
       featuredMemories.length === 0 ||
       typeof window === "undefined"
     ) {
@@ -228,8 +348,24 @@ export function HomeMemoryOrbit({
       nextVersion,
     );
 
+    const requestId = shuffleRequestRef.current + 1;
+    shuffleRequestRef.current = requestId;
+
     setShuffleVersion(nextVersion);
     setHoveredAssignmentKey(null);
+    setIsPreparingShuffle(true);
+
+    await Promise.all(
+      nextAssignments.map((assignment) =>
+        preloadImage(getMemoryImageUrl(assignment.memory)),
+      ),
+    );
+
+    if (!isMountedRef.current || shuffleRequestRef.current !== requestId) {
+      return;
+    }
+
+    setIsPreparingShuffle(false);
     setIncomingAssignments(nextAssignments);
     setIsAnimating(true);
     setShowIncoming(false);
@@ -245,6 +381,7 @@ export function HomeMemoryOrbit({
       setActiveAssignments(nextAssignments);
       setIncomingAssignments(null);
       setIsAnimating(false);
+      setIsPreparingShuffle(false);
       setShowIncoming(false);
       timeoutRef.current = null;
     }, SHUFFLE_DURATION_MS);
@@ -287,15 +424,30 @@ export function HomeMemoryOrbit({
             ? orbitAssignments.map((assignment, index) => {
                 const assignmentKey = `${assignment.slot.id}-${assignment.memory.id}`;
                 const isHovered = hoveredAssignmentKey === assignmentKey;
+                const imageUrl = getMemoryImageUrl(assignment.memory);
+                const loadedImageMeta = loadedImages[imageUrl];
                 const publicName = getPublicMemoryDisplayName(assignment.memory);
                 const hasKnownDimensions =
-                  typeof assignment.memory.imageWidth === "number" &&
-                  typeof assignment.memory.imageHeight === "number" &&
-                  assignment.memory.imageWidth > 0 &&
-                  assignment.memory.imageHeight > 0;
-                const aspectRatio = hasKnownDimensions
-                  ? `${assignment.memory.imageWidth} / ${assignment.memory.imageHeight}`
-                  : undefined;
+                  (typeof assignment.memory.imageWidth === "number" &&
+                    typeof assignment.memory.imageHeight === "number" &&
+                    assignment.memory.imageWidth > 0 &&
+                    assignment.memory.imageHeight > 0) ||
+                  Boolean(loadedImageMeta);
+                const imageWidth =
+                  assignment.memory.imageWidth && assignment.memory.imageWidth > 0
+                    ? assignment.memory.imageWidth
+                    : loadedImageMeta?.width;
+                const imageHeight =
+                  assignment.memory.imageHeight && assignment.memory.imageHeight > 0
+                    ? assignment.memory.imageHeight
+                    : loadedImageMeta?.height;
+                const aspectRatio =
+                  imageWidth && imageHeight
+                    ? `${imageWidth} / ${imageHeight}`
+                    : index % 3 === 0
+                      ? "4 / 5"
+                      : "5 / 4";
+                const isImageReady = Boolean(loadedImageMeta);
 
                 return (
                   <div
@@ -325,15 +477,34 @@ export function HomeMemoryOrbit({
                         width: assignment.slot.width,
                       }}
                     >
-                      <div className="overflow-hidden" style={{ aspectRatio }}>
+                      <div
+                        className="relative overflow-hidden bg-white/[0.05]"
+                        style={{ aspectRatio }}
+                      >
+                        <div
+                          aria-hidden="true"
+                          className={`absolute inset-0 bg-white/[0.08] transition-opacity duration-500 ${
+                            isImageReady ? "opacity-0" : "animate-pulse opacity-100"
+                          }`}
+                        />
                         <img
-                          src={assignment.memory.thumbnailUrl ?? assignment.memory.imageUrl}
+                          src={imageUrl}
                           alt={publicName}
-                          width={assignment.memory.imageWidth}
-                          height={assignment.memory.imageHeight}
-                          loading={index < 6 ? "eager" : "lazy"}
+                          width={imageWidth}
+                          height={imageHeight}
+                          loading="eager"
                           decoding="async"
-                          className={`block w-full transition duration-700 group-hover:scale-[1.03] ${
+                          fetchPriority={index < 8 ? "high" : "auto"}
+                          onLoad={(event) =>
+                            registerLoadedImage(
+                              imageUrl,
+                              event.currentTarget.naturalWidth,
+                              event.currentTarget.naturalHeight,
+                            )
+                          }
+                          className={`relative z-10 block w-full transition-[opacity,transform] duration-700 group-hover:scale-[1.03] ${
+                            isImageReady ? "opacity-100" : "opacity-0"
+                          } ${
                             hasKnownDimensions
                               ? "h-full object-cover"
                               : "h-auto"
@@ -348,15 +519,30 @@ export function HomeMemoryOrbit({
 
           {!isLoading && incomingAssignments
             ? incomingAssignments.map((assignment, index) => {
+                const imageUrl = getMemoryImageUrl(assignment.memory);
+                const loadedImageMeta = loadedImages[imageUrl];
                 const publicName = getPublicMemoryDisplayName(assignment.memory);
                 const hasKnownDimensions =
-                  typeof assignment.memory.imageWidth === "number" &&
-                  typeof assignment.memory.imageHeight === "number" &&
-                  assignment.memory.imageWidth > 0 &&
-                  assignment.memory.imageHeight > 0;
-                const aspectRatio = hasKnownDimensions
-                  ? `${assignment.memory.imageWidth} / ${assignment.memory.imageHeight}`
-                  : undefined;
+                  (typeof assignment.memory.imageWidth === "number" &&
+                    typeof assignment.memory.imageHeight === "number" &&
+                    assignment.memory.imageWidth > 0 &&
+                    assignment.memory.imageHeight > 0) ||
+                  Boolean(loadedImageMeta);
+                const imageWidth =
+                  assignment.memory.imageWidth && assignment.memory.imageWidth > 0
+                    ? assignment.memory.imageWidth
+                    : loadedImageMeta?.width;
+                const imageHeight =
+                  assignment.memory.imageHeight && assignment.memory.imageHeight > 0
+                    ? assignment.memory.imageHeight
+                    : loadedImageMeta?.height;
+                const aspectRatio =
+                  imageWidth && imageHeight
+                    ? `${imageWidth} / ${imageHeight}`
+                    : index % 3 === 0
+                      ? "4 / 5"
+                      : "5 / 4";
+                const isImageReady = Boolean(loadedImageMeta);
 
                 return (
                   <div
@@ -375,15 +561,34 @@ export function HomeMemoryOrbit({
                         width: assignment.slot.width,
                       }}
                     >
-                      <div className="overflow-hidden" style={{ aspectRatio }}>
+                      <div
+                        className="relative overflow-hidden bg-white/[0.05]"
+                        style={{ aspectRatio }}
+                      >
+                        <div
+                          aria-hidden="true"
+                          className={`absolute inset-0 bg-white/[0.08] transition-opacity duration-500 ${
+                            isImageReady ? "opacity-0" : "animate-pulse opacity-100"
+                          }`}
+                        />
                         <img
-                          src={assignment.memory.thumbnailUrl ?? assignment.memory.imageUrl}
+                          src={imageUrl}
                           alt={publicName}
-                          width={assignment.memory.imageWidth}
-                          height={assignment.memory.imageHeight}
-                          loading={index < 6 ? "eager" : "lazy"}
+                          width={imageWidth}
+                          height={imageHeight}
+                          loading="eager"
                           decoding="async"
-                          className={`block w-full ${
+                          fetchPriority={index < 8 ? "high" : "auto"}
+                          onLoad={(event) =>
+                            registerLoadedImage(
+                              imageUrl,
+                              event.currentTarget.naturalWidth,
+                              event.currentTarget.naturalHeight,
+                            )
+                          }
+                          className={`relative z-10 block w-full transition-opacity duration-500 ${
+                            isImageReady ? "opacity-100" : "opacity-0"
+                          } ${
                             hasKnownDimensions
                               ? "h-full object-cover"
                               : "h-auto"
@@ -408,12 +613,27 @@ export function HomeMemoryOrbit({
               <div className="pointer-events-auto mt-5 flex flex-col items-center gap-3 sm:mt-6">
                 <button
                   type="button"
-                  onClick={handleShuffle}
-                  disabled={isLoading || isAnimating || featuredMemories.length < 2}
+                  onClick={() => {
+                    void handleShuffle();
+                  }}
+                  disabled={
+                    isLoading ||
+                    isAnimating ||
+                    isPreparingShuffle ||
+                    featuredMemories.length < 2
+                  }
                   className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-white/24 bg-white/12 px-5 text-sm font-black text-white shadow-[0_16px_36px_rgba(0,0,0,0.18)] backdrop-blur-md transition hover:bg-white/18 disabled:cursor-not-allowed disabled:opacity-55 sm:h-13 sm:px-6 sm:text-base"
                 >
-                  <RiShuffleLine className={isAnimating ? "animate-spin" : ""} />
-                  <span>{isAnimating ? "전시 교체 중..." : "셔플"}</span>
+                  <RiShuffleLine
+                    className={isAnimating || isPreparingShuffle ? "animate-spin" : ""}
+                  />
+                  <span>
+                    {isPreparingShuffle
+                      ? "이미지 준비 중..."
+                      : isAnimating
+                        ? "전시 교체 중..."
+                        : "셔플"}
+                  </span>
                 </button>
 
                 {!isLoading && !hasMemories ? (
