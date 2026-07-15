@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { readJson } from "@/lib/api-client";
+import { invalidateApiClientCache, readJson } from "@/lib/api-client";
 import { readImageDimensions } from "@/lib/browser-images";
 import {
   isRecoverableDirectUploadError,
@@ -140,6 +140,7 @@ function ImageManagerCard({
             throw new Error(fallbackResult.error || "수정에 실패했어요.");
           }
 
+          invalidateApiClientCache();
           onUpdated(fallbackResult.memory);
           setSuccessMessage("이미지를 저장했어요.");
           setFile(null);
@@ -172,6 +173,7 @@ function ImageManagerCard({
         throw new Error(result.error || "수정에 실패했어요.");
       }
 
+      invalidateApiClientCache();
       onUpdated(result.memory);
       setSuccessMessage("이미지를 저장했어요.");
       setFile(null);
@@ -215,6 +217,7 @@ function ImageManagerCard({
         throw new Error(result.error || "삭제에 실패했어요.");
       }
 
+      invalidateApiClientCache();
       onDeleted(memory.id, memory.name, result.warning);
     } catch (error) {
       setErrorMessage(
@@ -247,7 +250,7 @@ function ImageManagerCard({
 
       <div className="mt-4 flex h-[200px] items-center justify-center overflow-hidden rounded-[22px] border border-white/70 bg-sky-50 p-3 sm:h-[280px]">
         <img
-          src={previewUrl || memory.imageUrl}
+          src={previewUrl || memory.thumbnailUrl || memory.imageUrl}
           alt={name}
           className="max-h-full w-auto max-w-full object-contain"
         />

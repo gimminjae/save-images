@@ -21,10 +21,10 @@ function DisplaySlide({
 }) {
   const publicName = getPublicMemoryDisplayName(memory);
 
-  return (
+      return (
     <div className={`absolute inset-0 ${animated ? "display-fade-in" : ""}`}>
       <img
-        src={memory.imageUrl}
+        src={memory.thumbnailUrl ?? memory.imageUrl}
         alt={publicName}
         className="absolute inset-0 h-full w-full scale-110 object-cover blur-2xl brightness-[0.38]"
       />

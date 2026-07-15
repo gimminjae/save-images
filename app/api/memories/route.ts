@@ -27,6 +27,10 @@ import {
 
 export const runtime = "nodejs";
 
+const PUBLIC_MEMORIES_HEADERS = {
+  "Cache-Control": "public, max-age=15, stale-while-revalidate=120",
+};
+
 function readNumber(value: FormDataEntryValue | unknown) {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
@@ -85,13 +89,17 @@ export async function GET(request: Request) {
             onlyMainFeatured: mainFeatured,
             onlyCategoryFeatured: categoryFeatured,
             categoryIds,
+            includeCategory: false,
+            lightweight: true,
           })
         : await listAllMemories({
             limit,
             onlyVisible: true,
             categoryIds,
+            includeCategory: false,
+            lightweight: true,
           });
-    return NextResponse.json({ memories });
+    return NextResponse.json({ memories }, { headers: PUBLIC_MEMORIES_HEADERS });
   } catch (error) {
     console.error("Failed to list memories", error);
 

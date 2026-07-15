@@ -5,6 +5,13 @@ import { getSupabasePublic } from "@/lib/supabase/server";
 import { buildCategoryPath, slugify } from "@/lib/utils";
 
 type CategoryRow = Record<string, unknown>;
+type CategoryTreeCache = {
+  expiresAt: number;
+  value: CategoryRecord[];
+};
+
+const CATEGORY_TREE_CACHE_TTL_MS = 60 * 1000;
+let categoryTreeCache: CategoryTreeCache | null = null;
 
 function toTimestamp(value: unknown) {
   if (typeof value !== "string") {
@@ -35,7 +42,39 @@ function assertNoError(error: { message: string } | null) {
   }
 }
 
-export async function getCategoryTree() {
+function readCategoryTreeCache() {
+  if (!categoryTreeCache) {
+    return null;
+  }
+
+  if (categoryTreeCache.expiresAt <= Date.now()) {
+    categoryTreeCache = null;
+    return null;
+  }
+
+  return categoryTreeCache.value;
+}
+
+function writeCategoryTreeCache(categories: CategoryRecord[]) {
+  categoryTreeCache = {
+    expiresAt: Date.now() + CATEGORY_TREE_CACHE_TTL_MS,
+    value: categories,
+  };
+}
+
+export function clearCategoryTreeCache() {
+  categoryTreeCache = null;
+}
+
+export async function getCategoryTree(options?: { forceFresh?: boolean }) {
+  if (!options?.forceFresh) {
+    const cached = readCategoryTreeCache();
+
+    if (cached) {
+      return cached;
+    }
+  }
+
   const supabase = getSupabasePublic();
   const { data, error } = await supabase
     .from("categories")
@@ -45,20 +84,16 @@ export async function getCategoryTree() {
 
   assertNoError(error);
 
-  return (data ?? []).map((row) => mapCategoryRow(row as unknown as CategoryRow));
+  const categories = (data ?? []).map((row) =>
+    mapCategoryRow(row as unknown as CategoryRow),
+  );
+  writeCategoryTreeCache(categories);
+  return categories;
 }
 
 export async function getCategoryById(id: string) {
-  const supabase = getSupabasePublic();
-  const { data, error } = await supabase
-    .from("categories")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
-
-  assertNoError(error);
-
-  return data ? mapCategoryRow(data as unknown as CategoryRow) : null;
+  const categories = await getCategoryTree();
+  return categories.find((category) => category.id === id) ?? null;
 }
 
 export async function getCategoryDescendantIds(id: string) {
@@ -82,7 +117,7 @@ export async function createCategory(input: {
   parentId?: string | null;
   sortOrder?: number;
 }) {
-  const categories = await getCategoryTree();
+  const categories = await getCategoryTree({ forceFresh: true });
   const parent = input.parentId
     ? categories.find((category) => category.id === input.parentId) ?? null
     : null;
@@ -110,6 +145,7 @@ export async function createCategory(input: {
     .single();
 
   assertNoError(error);
+  clearCategoryTreeCache();
 
   return mapCategoryRow(data as unknown as CategoryRow);
 }
@@ -122,7 +158,7 @@ export async function updateCategory(
     sortOrder?: number;
   },
 ) {
-  const existingCategories = await getCategoryTree();
+  const existingCategories = await getCategoryTree({ forceFresh: true });
   const current = existingCategories.find((category) => category.id === id);
 
   if (!current) {
@@ -191,11 +227,12 @@ export async function updateCategory(
     assertNoError(descendantError);
   }
 
+  clearCategoryTreeCache();
   return mapCategoryRow(data as unknown as CategoryRow);
 }
 
 export async function deleteCategory(id: string) {
-  const categories = await getCategoryTree();
+  const categories = await getCategoryTree({ forceFresh: true });
   const current = categories.find((category) => category.id === id);
 
   if (!current) {
@@ -224,6 +261,7 @@ export async function deleteCategory(id: string) {
   const { error } = await supabase.from("categories").delete().eq("id", id);
 
   assertNoError(error);
+  clearCategoryTreeCache();
 
   return { success: true };
 }

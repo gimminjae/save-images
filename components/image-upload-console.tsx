@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { readJson } from "@/lib/api-client";
+import { invalidateApiClientCache, readJson } from "@/lib/api-client";
 import { readImageDimensions } from "@/lib/browser-images";
 import {
   isRecoverableDirectUploadError,
@@ -320,6 +320,10 @@ export function ImageUploadConsole({
     );
 
     setIsUploading(false);
+
+    if (successCount > 0) {
+      invalidateApiClientCache();
+    }
 
     if (failureCount === 0 && successCount === entries.length) {
       setMessage(

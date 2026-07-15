@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-
+import { invalidateApiClientCache, readJson } from "@/lib/api-client";
 import type { CategoryRecord } from "@/types/category";
 
 type CategoryManagerProps = {
@@ -20,24 +20,6 @@ function toDraft(category?: CategoryRecord): CategoryDraft {
     parentId: category?.parentId ?? "",
     sortOrder: String(category?.sortOrder ?? 0),
   };
-}
-
-async function readJson<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
-  const response = await fetch(input, init);
-  const payload = (await response.json().catch(() => null)) as
-    | { error?: string }
-    | T
-    | null;
-
-  if (!response.ok) {
-    throw new Error(
-      payload && typeof payload === "object" && "error" in payload && typeof payload.error === "string"
-        ? payload.error
-        : "요청을 처리하지 못했어요.",
-    );
-  }
-
-  return payload as T;
 }
 
 export function CategoryManager({
@@ -92,6 +74,7 @@ export function CategoryManager({
         }),
       });
 
+      invalidateApiClientCache();
       setCreateDraft(toDraft());
       setMessage("카테고리를 추가했어요.");
       await refreshCategories();
@@ -132,6 +115,7 @@ export function CategoryManager({
         }),
       });
 
+      invalidateApiClientCache();
       setEditingId(null);
       setMessage("카테고리를 수정했어요.");
       await refreshCategories();
@@ -165,6 +149,7 @@ export function CategoryManager({
         method: "DELETE",
       });
 
+      invalidateApiClientCache();
       if (editingId === category.id) {
         setEditingId(null);
       }

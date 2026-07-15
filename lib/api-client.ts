@@ -15,6 +15,15 @@ type CategoriesResponse = {
   error?: string;
 };
 
+type CachedApiResponse = {
+  expiresAt: number;
+  value: unknown;
+};
+
+const CATEGORY_TREE_CACHE_TTL_MS = 60 * 1000;
+const PUBLISHED_MEMORIES_CACHE_TTL_MS = 15 * 1000;
+const apiResponseCache = new Map<string, CachedApiResponse>();
+
 function buildPath(
   pathname: string,
   query?: Record<string, string | number | boolean | undefined>,
@@ -39,6 +48,44 @@ function buildPath(
 
 export function isAbortError(error: unknown) {
   return error instanceof Error && error.name === "AbortError";
+}
+
+function readCachedValue<T>(cacheKey: string) {
+  const cached = apiResponseCache.get(cacheKey);
+
+  if (!cached) {
+    return null;
+  }
+
+  if (cached.expiresAt <= Date.now()) {
+    apiResponseCache.delete(cacheKey);
+    return null;
+  }
+
+  return cached.value as T;
+}
+
+function storeCachedValue<T>(cacheKey: string, value: T, ttlMs: number) {
+  apiResponseCache.set(cacheKey, {
+    expiresAt: Date.now() + ttlMs,
+    value,
+  });
+}
+
+export function invalidateApiClientCache(matcher?: RegExp | string) {
+  if (!matcher) {
+    apiResponseCache.clear();
+    return;
+  }
+
+  for (const key of apiResponseCache.keys()) {
+    const matches =
+      typeof matcher === "string" ? key.startsWith(matcher) : matcher.test(key);
+
+    if (matches) {
+      apiResponseCache.delete(key);
+    }
+  }
 }
 
 export async function readJson<T>(
@@ -66,10 +113,19 @@ export async function readJson<T>(
 }
 
 export async function fetchCategoryTree(signal?: AbortSignal) {
+  const cacheKey = "categories:tree";
+  const cached = readCachedValue<CategoriesResponse>(cacheKey);
+
+  if (cached) {
+    return Array.isArray(cached.categories) ? cached.categories : [];
+  }
+
   const payload = await readJson<CategoriesResponse>("/api/categories/tree", {
-    cache: "no-store",
+    cache: "default",
     signal,
   });
+
+  storeCachedValue(cacheKey, payload, CATEGORY_TREE_CACHE_TTL_MS);
 
   return Array.isArray(payload.categories) ? payload.categories : [];
 }
@@ -84,19 +140,26 @@ export async function fetchPublishedMemories(
     signal?: AbortSignal;
   },
 ) {
-  const payload = await readJson<PublishedMemoriesResponse>(
-    buildPath("/api/memories", {
-      limit: options?.limit,
-      mainFeatured: options?.mainFeatured,
-      categoryFeatured: options?.categoryFeatured,
-      categoryId: options?.categoryId,
-      includeDescendants: options?.includeDescendants,
-    }),
-    {
-      cache: "no-store",
-      signal: options?.signal,
-    },
-  );
+  const path = buildPath("/api/memories", {
+    limit: options?.limit,
+    mainFeatured: options?.mainFeatured,
+    categoryFeatured: options?.categoryFeatured,
+    categoryId: options?.categoryId,
+    includeDescendants: options?.includeDescendants,
+  });
+  const cacheKey = `published:${path}`;
+  const cached = readCachedValue<PublishedMemoriesResponse>(cacheKey);
+
+  if (cached) {
+    return Array.isArray(cached.memories) ? cached.memories : [];
+  }
+
+  const payload = await readJson<PublishedMemoriesResponse>(path, {
+    cache: "default",
+    signal: options?.signal,
+  });
+
+  storeCachedValue(cacheKey, payload, PUBLISHED_MEMORIES_CACHE_TTL_MS);
 
   return Array.isArray(payload.memories) ? payload.memories : [];
 }

@@ -6,12 +6,10 @@ import { EventSceneBackdrop } from "@/components/event-scene-backdrop";
 import { HomeCategoryGallery } from "@/components/home-category-gallery";
 import { SiteShell } from "@/components/site-shell";
 import {
-  fetchCategoryTree,
   fetchPublishedMemories,
   isAbortError,
 } from "@/lib/api-client";
 import { getMissingSupabasePublicEnv } from "@/lib/env";
-import type { CategoryRecord } from "@/types/category";
 import type { MemoryRecord } from "@/types/memory";
 
 function HomeScene({ children }: { children: React.ReactNode }) {
@@ -39,14 +37,7 @@ function HomeScene({ children }: { children: React.ReactNode }) {
 
 export default function Home() {
   const missingEnvVars = useMemo(() => getMissingSupabasePublicEnv(), []);
-  const [categories, setCategories] = useState<CategoryRecord[]>([]);
   const [mainFeatured, setMainFeatured] = useState<MemoryRecord[]>([]);
-  const [categoryFeaturedMemories, setCategoryFeaturedMemories] = useState<
-    MemoryRecord[]
-  >([]);
-  const [initialSelectedCategoryId, setInitialSelectedCategoryId] = useState<
-    string | null
-  >(null);
   const [isLoading, setIsLoading] = useState(missingEnvVars.length === 0);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -57,34 +48,14 @@ export default function Home() {
 
     const controller = new AbortController();
 
-    void Promise.all([
-      fetchCategoryTree(controller.signal),
-      fetchPublishedMemories({
-        limit: 12,
-        mainFeatured: true,
-        signal: controller.signal,
-      }),
-      fetchPublishedMemories({
-        limit: 1000,
-        categoryFeatured: true,
-        signal: controller.signal,
-      }),
-    ])
-      .then(([loadedCategories, loadedMainFeatured, loadedCategoryFeatured]) => {
-        const categoryId = new URL(window.location.href).searchParams.get(
-          "category",
-        );
-        const nextSelectedCategoryId =
-          categoryId &&
-          loadedCategories.some((category) => category.id === categoryId)
-            ? categoryId
-            : null;
-
+    void fetchPublishedMemories({
+      limit: 12,
+      mainFeatured: true,
+      signal: controller.signal,
+    })
+      .then((loadedMainFeatured) => {
         startTransition(() => {
-          setCategories(loadedCategories);
           setMainFeatured(loadedMainFeatured);
-          setCategoryFeaturedMemories(loadedCategoryFeatured);
-          setInitialSelectedCategoryId(nextSelectedCategoryId);
           setIsLoading(false);
         });
       })
@@ -140,9 +111,6 @@ export default function Home() {
             </div>
           ) : (
             <HomeCategoryGallery
-              categories={categories}
-              categoryFeaturedMemories={categoryFeaturedMemories}
-              initialSelectedCategoryId={initialSelectedCategoryId}
               mainFeatured={mainFeatured}
             />
           )}

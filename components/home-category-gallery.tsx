@@ -5,9 +5,6 @@ import { MainMemorySpotlight } from "@/components/main-memory-spotlight";
 import type { MemoryRecord } from "@/types/memory";
 
 type HomeCategoryGalleryProps = {
-  categories: unknown[];
-  categoryFeaturedMemories: MemoryRecord[];
-  initialSelectedCategoryId: string | null;
   mainFeatured: MemoryRecord[];
 };
 

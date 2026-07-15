@@ -4,6 +4,7 @@
 
 import { useEffect, useEffectEvent, useState } from "react";
 import { createPortal } from "react-dom";
+import { invalidateApiClientCache } from "@/lib/api-client";
 import { getPublicMemoryDisplayName } from "@/lib/memory-records";
 import type { MemoryRecord } from "@/types/memory";
 
@@ -115,6 +116,7 @@ export function MemoryDetailModal({
         throw new Error(payload?.error || "홈 화면 게시 상태를 바꾸지 못했어요.");
       }
 
+      invalidateApiClientCache();
       setActiveMemory(payload.memory);
       onUpdated?.(payload.memory);
       setShowManageAuth(false);

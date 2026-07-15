@@ -77,7 +77,7 @@ body {
       rgba(0, 0, 0, 0) 46%,
       rgba(3, 8, 24, 0.24) 100%
     ),
-    url("/hanmong-night-sky-20260715.jpg");
+    url("/hanmong-night-sky-20260715-desktop.jpg");
   background-position: center;
   background-repeat: no-repeat;
   background-size: cover;
@@ -85,6 +85,28 @@ body {
   font-family: var(--font-sans);
   text-rendering: optimizeLegibility;
   -webkit-tap-highlight-color: transparent;
+}
+
+@media (max-width: 768px) {
+  body {
+    background-image:
+      radial-gradient(
+        circle at center,
+        rgba(8, 16, 38, 0.08) 0%,
+        rgba(8, 16, 38, 0.14) 28%,
+        rgba(5, 12, 31, 0.34) 56%,
+        rgba(4, 9, 24, 0.68) 82%,
+        rgba(2, 6, 18, 0.82) 100%
+      ),
+      linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.06) 0%,
+        rgba(255, 255, 255, 0.02) 24%,
+        rgba(0, 0, 0, 0) 46%,
+        rgba(3, 8, 24, 0.24) 100%
+      ),
+      url("/hanmong-night-sky-20260715-mobile.jpg");
+  }
 }
 
 a {

@@ -10,6 +10,23 @@ import { getSupabasePublic } from "@/lib/supabase/server";
 
 type MemoryRow = Record<string, unknown>;
 type CategoryRow = Record<string, unknown>;
+type ListAllMemoriesOptions = {
+  limit?: number;
+  searchQuery?: string;
+  categoryIds?: string[];
+  onlyVisible?: boolean;
+  onlyMainFeatured?: boolean;
+  onlyCategoryFeatured?: boolean;
+  includeCategory?: boolean;
+  lightweight?: boolean;
+};
+type MemoryListCacheEntry = {
+  expiresAt: number;
+  value: MemoryRecord[];
+};
+
+const PUBLIC_MEMORY_LIST_CACHE_TTL_MS = 15 * 1000;
+const publicMemoryListCache = new Map<string, MemoryListCacheEntry>();
 
 function toTimestamp(value: unknown) {
   if (typeof value !== "string") {
@@ -81,9 +98,37 @@ function assertNoError(error: { message: string } | null) {
   }
 }
 
-function createMemorySelect() {
+function createMemorySelect(options?: {
+  includeCategory?: boolean;
+  lightweight?: boolean;
+}) {
+  const baseFields = options?.lightweight
+    ? `
+        id,
+        name,
+        nickname,
+        description,
+        image_url,
+        image_key,
+        category_id,
+        image_width,
+        image_height,
+        created_at,
+        updated_at,
+        is_visible,
+        is_category_featured,
+        is_main_featured,
+        thumbnail_url,
+        is_deleted
+      `
+    : "*";
+
+  if (options?.includeCategory === false) {
+    return baseFields;
+  }
+
   return `
-    *,
+    ${baseFields},
     categories (
       id,
       parent_id,
@@ -98,11 +143,53 @@ function createMemorySelect() {
   `;
 }
 
+function shouldUsePublicMemoryListCache(options?: ListAllMemoriesOptions) {
+  return options?.onlyVisible === true && !options.searchQuery?.trim();
+}
+
+function createPublicMemoryListCacheKey(options?: ListAllMemoriesOptions) {
+  return JSON.stringify({
+    categoryIds: [...(options?.categoryIds ?? [])].sort(),
+    includeCategory: options?.includeCategory !== false,
+    limit: options?.limit ?? null,
+    lightweight: options?.lightweight === true,
+    onlyCategoryFeatured: options?.onlyCategoryFeatured === true,
+    onlyMainFeatured: options?.onlyMainFeatured === true,
+    onlyVisible: options?.onlyVisible === true,
+  });
+}
+
+function readPublicMemoryListCache(cacheKey: string) {
+  const cached = publicMemoryListCache.get(cacheKey);
+
+  if (!cached) {
+    return null;
+  }
+
+  if (cached.expiresAt <= Date.now()) {
+    publicMemoryListCache.delete(cacheKey);
+    return null;
+  }
+
+  return cached.value;
+}
+
+function writePublicMemoryListCache(cacheKey: string, memories: MemoryRecord[]) {
+  publicMemoryListCache.set(cacheKey, {
+    expiresAt: Date.now() + PUBLIC_MEMORY_LIST_CACHE_TTL_MS,
+    value: memories,
+  });
+}
+
+export function clearPublicMemoryListCache() {
+  publicMemoryListCache.clear();
+}
+
 export async function getMemoryById(id: string) {
   const supabase = getSupabasePublic();
   const { data, error } = await supabase
     .from("memories")
-    .select(createMemorySelect())
+    .select(createMemorySelect({ includeCategory: true }))
     .eq("id", id)
     .maybeSingle();
 
@@ -111,22 +198,31 @@ export async function getMemoryById(id: string) {
   return data ? mapMemoryRow(data as unknown as MemoryRow) : null;
 }
 
-export async function listAllMemories(options?: {
-  limit?: number;
-  searchQuery?: string;
-  categoryIds?: string[];
-  onlyVisible?: boolean;
-  onlyMainFeatured?: boolean;
-  onlyCategoryFeatured?: boolean;
-}) {
+export async function listAllMemories(options?: ListAllMemoriesOptions) {
   if (options?.categoryIds && options.categoryIds.length === 0) {
     return [];
+  }
+
+  const useCache = shouldUsePublicMemoryListCache(options);
+  const cacheKey = useCache ? createPublicMemoryListCacheKey(options) : null;
+
+  if (cacheKey) {
+    const cached = readPublicMemoryListCache(cacheKey);
+
+    if (cached) {
+      return cached;
+    }
   }
 
   const supabase = getSupabasePublic();
   let query = supabase
     .from("memories")
-    .select(createMemorySelect())
+    .select(
+      createMemorySelect({
+        includeCategory: options?.includeCategory,
+        lightweight: options?.lightweight,
+      }),
+    )
     .eq("is_deleted", false)
     .order("created_at", { ascending: false });
 
@@ -160,7 +256,15 @@ export async function listAllMemories(options?: {
 
   assertNoError(error);
 
-  return (data ?? []).map((row) => mapMemoryRow(row as unknown as MemoryRow));
+  const memories = (data ?? []).map((row) =>
+    mapMemoryRow(row as unknown as MemoryRow),
+  );
+
+  if (cacheKey) {
+    writePublicMemoryListCache(cacheKey, memories);
+  }
+
+  return memories;
 }
 
 export async function listPublishedMemories(limit = 120) {
@@ -208,10 +312,11 @@ export async function createMemory(input: CreateMemoryInput) {
       is_deleted: false,
       sort_order: null,
     })
-    .select(createMemorySelect())
+    .select(createMemorySelect({ includeCategory: true }))
     .single();
 
   assertNoError(error);
+  clearPublicMemoryListCache();
 
   return mapMemoryRow(data as unknown as MemoryRow);
 }
@@ -246,10 +351,11 @@ export async function updateMemory(id: string, input: UpdateMemoryInput) {
         : {}),
     })
     .eq("id", id)
-    .select(createMemorySelect())
+    .select(createMemorySelect({ includeCategory: true }))
     .single();
 
   assertNoError(error);
+  clearPublicMemoryListCache();
 
   return mapMemoryRow(data as unknown as MemoryRow);
 }
@@ -259,4 +365,5 @@ export async function deleteMemory(id: string) {
   const { error } = await supabase.from("memories").delete().eq("id", id);
 
   assertNoError(error);
+  clearPublicMemoryListCache();
 }
