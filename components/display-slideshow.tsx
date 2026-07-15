@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { startTransition, useEffect, useMemo, useState } from "react";
+import { EventSceneBackdrop } from "@/components/event-scene-backdrop";
 import { subscribeToPublishedMemories } from "@/lib/memories/client";
 import { getPublicMemoryDisplayName } from "@/lib/memory-records";
 import type { MemoryRecord } from "@/types/memory";
@@ -126,8 +127,9 @@ export function DisplaySlideshow({
 
   if (!activeMemory) {
     return (
-      <section className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-950 px-6 py-10 text-white">
-        <div className="max-w-2xl rounded-[32px] border border-white/15 bg-white/8 px-8 py-10 text-center shadow-[0_24px_80px_rgba(0,0,0,0.26)] backdrop-blur-md">
+      <section className="relative flex min-h-screen items-center justify-center overflow-hidden px-6 py-10 text-white">
+        <EventSceneBackdrop />
+        <div className="relative z-10 max-w-2xl rounded-[32px] border border-white/15 bg-black/28 px-8 py-10 text-center shadow-[0_24px_80px_rgba(0,0,0,0.26)] backdrop-blur-md">
           <p className="text-sm font-black uppercase tracking-[0.3em] text-sky-200/80">
             Lobby Display
           </p>
@@ -146,7 +148,8 @@ export function DisplaySlideshow({
   }
 
   return (
-    <section className="relative min-h-screen overflow-hidden bg-slate-950">
+    <section className="relative min-h-screen overflow-hidden">
+      <EventSceneBackdrop />
       <DisplaySlide memory={activeMemory} />
       {incomingMemory ? (
         <DisplaySlide memory={incomingMemory} animated />

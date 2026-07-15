@@ -1,8 +1,10 @@
 "use client";
 
 import { startTransition, useEffect, useMemo, useState } from "react";
+import { LuLayoutGrid, LuPanelsTopLeft, LuX } from "react-icons/lu";
 import { ConfigurationNotice } from "@/components/configuration-notice";
 import { ImageExhibitionGrid } from "@/components/image-exhibition-grid";
+import { MainMemorySpotlight } from "@/components/main-memory-spotlight";
 import { SiteShell } from "@/components/site-shell";
 import {
   fetchCategoryTree,
@@ -15,10 +17,21 @@ import type { MemoryRecord } from "@/types/memory";
 
 type GallerySection = {
   id: string;
-  depth: number;
   memories: MemoryRecord[];
   name: string;
 };
+
+type GalleryViewMode = "grid" | "spotlight";
+
+function getPrimaryCategories(categories: CategoryRecord[]) {
+  const depthOneCategories = categories.filter((category) => category.depth === 1);
+
+  if (depthOneCategories.length > 0) {
+    return depthOneCategories;
+  }
+
+  return categories.filter((category) => category.depth === 0);
+}
 
 function getCategoryLabel(
   category: Pick<CategoryRecord, "depth" | "name">,
@@ -36,13 +49,26 @@ function getCategoryLabel(
 export default function GalleryPage() {
   const missingEnvVars = useMemo(() => getMissingSupabasePublicEnv(), []);
   const [categories, setCategories] = useState<CategoryRecord[]>([]);
+  const [hasInitializedCategoryFilter, setHasInitializedCategoryFilter] =
+    useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
     null,
   );
+  const [viewMode, setViewMode] = useState<GalleryViewMode>("grid");
   const [memories, setMemories] = useState<MemoryRecord[]>([]);
   const [isLoading, setIsLoading] = useState(missingEnvVars.length === 0);
   const [isSwitchingCategory, setIsSwitchingCategory] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  const categoryMap = useMemo(
+    () => new Map(categories.map((category) => [category.id, category])),
+    [categories],
+  );
+  const primaryCategories = useMemo(
+    () => getPrimaryCategories(categories),
+    [categories],
+  );
+  const primaryDepth = primaryCategories[0]?.depth ?? 1;
 
   useEffect(() => {
     if (missingEnvVars.length > 0) {
@@ -53,23 +79,24 @@ export default function GalleryPage() {
 
     void fetchCategoryTree(controller.signal)
       .then((loadedCategories) => {
-        const categoryId = new URL(window.location.href).searchParams.get(
-          "category",
-        );
+        const primaryLoadedCategories = getPrimaryCategories(loadedCategories);
+        const url = new URL(window.location.href);
+        const categoryId = url.searchParams.get("category");
+        const viewParam = url.searchParams.get("view");
+        const fallbackCategoryId =
+          primaryLoadedCategories[0]?.id ?? loadedCategories[0]?.id ?? null;
         const nextSelectedCategoryId =
           categoryId &&
           loadedCategories.some((category) => category.id === categoryId)
             ? categoryId
-            : loadedCategories[0]?.id ?? null;
+            : fallbackCategoryId;
 
         startTransition(() => {
           setCategories(loadedCategories);
           setSelectedCategoryId(nextSelectedCategoryId);
+          setViewMode(viewParam === "spotlight" ? "spotlight" : "grid");
+          setHasInitializedCategoryFilter(true);
         });
-
-        if (loadedCategories.length === 0) {
-          setIsLoading(false);
-        }
       })
       .catch((error) => {
         if (isAbortError(error)) {
@@ -86,18 +113,92 @@ export default function GalleryPage() {
     };
   }, [missingEnvVars]);
 
+  const selectedPrimaryCategoryId = useMemo(() => {
+    if (primaryCategories.length === 0 || !selectedCategoryId) {
+      return null;
+    }
+
+    let current = categoryMap.get(selectedCategoryId) ?? null;
+
+    while (current) {
+      if (current.depth === primaryDepth) {
+        return current.id;
+      }
+
+      current = current.parentId
+        ? (categoryMap.get(current.parentId) ?? null)
+        : null;
+    }
+
+    return null;
+  }, [categoryMap, primaryCategories, primaryDepth, selectedCategoryId]);
+
+  const selectedPrimaryCategory = useMemo(
+    () =>
+      selectedPrimaryCategoryId
+        ? (categoryMap.get(selectedPrimaryCategoryId) ?? null)
+        : null,
+    [categoryMap, selectedPrimaryCategoryId],
+  );
+
+  const secondaryCategories = useMemo(() => {
+    if (!selectedPrimaryCategory) {
+      return [];
+    }
+
+    return categories.filter(
+      (category) => category.parentId === selectedPrimaryCategory.id,
+    );
+  }, [categories, selectedPrimaryCategory]);
+
+  const selectedSecondaryCategoryId = useMemo(() => {
+    if (!selectedCategoryId || !selectedPrimaryCategory) {
+      return null;
+    }
+
+    if (selectedCategoryId === selectedPrimaryCategory.id) {
+      return null;
+    }
+
+    let current = categoryMap.get(selectedCategoryId) ?? null;
+
+    while (current) {
+      if (current.parentId === selectedPrimaryCategory.id) {
+        return current.id;
+      }
+
+      current = current.parentId
+        ? (categoryMap.get(current.parentId) ?? null)
+        : null;
+    }
+
+    return null;
+  }, [categoryMap, selectedCategoryId, selectedPrimaryCategory]);
+
   useEffect(() => {
-    if (!selectedCategoryId) {
+    if (!hasInitializedCategoryFilter) {
       return;
     }
 
     const url = new URL(window.location.href);
-    url.searchParams.set("category", selectedCategoryId);
+
+    if (selectedCategoryId) {
+      url.searchParams.set("category", selectedCategoryId);
+    } else {
+      url.searchParams.delete("category");
+    }
+
+    if (viewMode === "spotlight") {
+      url.searchParams.set("view", "spotlight");
+    } else {
+      url.searchParams.delete("view");
+    }
+
     window.history.replaceState({}, "", url.toString());
-  }, [selectedCategoryId]);
+  }, [hasInitializedCategoryFilter, selectedCategoryId, viewMode]);
 
   useEffect(() => {
-    if (missingEnvVars.length > 0 || !selectedCategoryId) {
+    if (missingEnvVars.length > 0 || !hasInitializedCategoryFilter) {
       return;
     }
 
@@ -105,8 +206,8 @@ export default function GalleryPage() {
 
     void fetchPublishedMemories({
       limit: 500,
-      categoryId: selectedCategoryId,
-      includeDescendants: true,
+      categoryId: selectedCategoryId ?? undefined,
+      includeDescendants: selectedCategoryId ? true : undefined,
       signal: controller.signal,
     })
       .then((loadedMemories) => {
@@ -120,7 +221,11 @@ export default function GalleryPage() {
         }
 
         console.error("Failed to load gallery memories", error);
-        setLoadError("선택한 카테고리의 이미지를 불러오지 못했어요.");
+        setLoadError(
+          selectedCategoryId
+            ? "선택한 카테고리의 이미지를 불러오지 못했어요."
+            : "전체 이미지를 불러오지 못했어요.",
+        );
       })
       .finally(() => {
         if (controller.signal.aborted) {
@@ -134,7 +239,27 @@ export default function GalleryPage() {
     return () => {
       controller.abort();
     };
-  }, [missingEnvVars, selectedCategoryId]);
+  }, [hasInitializedCategoryFilter, missingEnvVars, selectedCategoryId]);
+
+  function handleCategorySelect(nextCategoryId: string) {
+    if (nextCategoryId === selectedCategoryId) {
+      return;
+    }
+
+    setLoadError(null);
+    setIsSwitchingCategory(true);
+    setSelectedCategoryId(nextCategoryId);
+  }
+
+  function handleCategoryClear() {
+    if (!selectedCategoryId) {
+      return;
+    }
+
+    setLoadError(null);
+    setIsSwitchingCategory(true);
+    setSelectedCategoryId(null);
+  }
 
   const selectedCategory = useMemo(
     () =>
@@ -147,7 +272,7 @@ export default function GalleryPage() {
 
   const selectedBranchCategories = useMemo(() => {
     if (!selectedCategory) {
-      return [];
+      return categories;
     }
 
     const prefix = `${selectedCategory.path}/`;
@@ -160,9 +285,11 @@ export default function GalleryPage() {
 
   const sections = useMemo<GallerySection[]>(() => {
     const memoriesByCategoryId = new Map<string, MemoryRecord[]>();
+    const uncategorizedMemories: MemoryRecord[] = [];
 
     memories.forEach((memory) => {
       if (!memory.categoryId) {
+        uncategorizedMemories.push(memory);
         return;
       }
 
@@ -171,7 +298,7 @@ export default function GalleryPage() {
       memoriesByCategoryId.set(memory.categoryId, current);
     });
 
-    return selectedBranchCategories.reduce<GallerySection[]>(
+    const orderedSections = selectedBranchCategories.reduce<GallerySection[]>(
       (accumulator, category) => {
         const categoryMemories = memoriesByCategoryId.get(category.id);
 
@@ -181,18 +308,26 @@ export default function GalleryPage() {
 
         accumulator.push({
           id: category.id,
-          depth: category.depth,
           memories: categoryMemories,
-          name: getCategoryLabel(
-            category,
-            selectedCategory?.depth ?? category.depth,
-          ),
+          name: selectedCategory
+            ? getCategoryLabel(category, selectedCategory.depth)
+            : getCategoryLabel(category),
         });
 
         return accumulator;
       },
       [],
     );
+
+    if (!selectedCategory && uncategorizedMemories.length > 0) {
+      orderedSections.push({
+        id: "uncategorized",
+        memories: uncategorizedMemories,
+        name: "미분류",
+      });
+    }
+
+    return orderedSections;
   }, [memories, selectedBranchCategories, selectedCategory]);
 
   return (
@@ -200,60 +335,127 @@ export default function GalleryPage() {
       {missingEnvVars.length > 0 ? (
         <ConfigurationNotice missingKeys={missingEnvVars} />
       ) : (
-        <section className="event-panel rounded-[36px] px-5 py-6 sm:px-6 sm:py-7">
+        <section className="px-5 py-6 sm:px-6 sm:py-7">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h1 className="text-3xl font-black tracking-[-0.05em] text-slate-950 sm:text-4xl">
-              모든 이미지
-            </h1>
             <span className="rounded-full bg-white/85 px-4 py-2 text-sm font-black text-sky-950">
               총 {memories.length}장
             </span>
           </div>
-          <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
-            <label className="block">
-              <span className="mb-2 block text-xs font-black tracking-[0.18em] text-slate-500 uppercase">
-                카테고리 선택
-              </span>
-              <select
-                value={selectedCategoryId ?? ""}
-                onChange={(event) => {
-                  const nextCategoryId = event.target.value || null;
 
-                  if (!nextCategoryId || nextCategoryId === selectedCategoryId) {
-                    return;
-                  }
+          <div className="mt-5 space-y-3">
+            <div className="rounded-[24px] border border-white/60 bg-white/62 px-4 py-4 shadow-[0_14px_28px_rgba(21,84,144,0.08)] backdrop-blur-md">
+              <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                <div className="min-w-0 flex-1">
+                  <div className="scrollbar-none flex gap-2 overflow-x-auto pb-1">
+                    {selectedCategoryId ? (
+                      <button
+                        type="button"
+                        onClick={handleCategoryClear}
+                        aria-label="전체 이미지 보기"
+                        className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rose-500 text-white shadow-[0_10px_20px_rgba(244,63,94,0.24)] transition hover:bg-rose-600"
+                      >
+                        <LuX className="h-4 w-4" />
+                      </button>
+                    ) : null}
 
-                  setLoadError(null);
-                  setIsSwitchingCategory(true);
-                  setSelectedCategoryId(nextCategoryId);
-                }}
-                disabled={categories.length === 0}
-                className="event-input block w-full rounded-[22px] border border-white/70 bg-white/88 px-4 py-3 text-sm font-bold text-slate-800 shadow-[0_14px_28px_rgba(21,84,144,0.08)] outline-none transition focus:border-sky-300"
-              >
-                {categories.length === 0 ? (
-                  <option value="">카테고리가 없습니다</option>
-                ) : null}
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {getCategoryLabel(category)}
-                  </option>
-                ))}
-              </select>
-            </label>
+                    {primaryCategories.map((category) => {
+                      const isActive = selectedPrimaryCategoryId === category.id;
 
-            <div className="rounded-[24px] border border-white/60 bg-white/62 px-4 py-3 shadow-[0_14px_28px_rgba(21,84,144,0.08)] backdrop-blur-md">
-              <p className="text-xs font-black tracking-[0.18em] text-slate-500 uppercase">
-                현재 보기
-              </p>
-              <p className="mt-1 text-lg font-black tracking-[-0.04em] text-slate-950">
-                {selectedCategory?.name ?? "미선택"}
-              </p>
-              <p className="mt-1 text-xs font-bold text-slate-500">
-                {selectedBranchCategories.length > 1
-                  ? `하위 ${selectedBranchCategories.length - 1}개 카테고리 포함`
-                  : "단일 카테고리 전시"}
-              </p>
+                      return (
+                        <button
+                          key={category.id}
+                          type="button"
+                          onClick={() => handleCategorySelect(category.id)}
+                          className={`shrink-0 rounded-full px-4 py-2.5 text-sm font-black transition ${
+                            isActive
+                              ? "bg-slate-950 text-white shadow-[0_12px_24px_rgba(15,23,42,0.24)]"
+                              : "bg-white/84 text-slate-700 shadow-[0_10px_20px_rgba(21,84,144,0.08)] hover:bg-white"
+                          }`}
+                        >
+                          {category.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="flex shrink-0 justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("grid")}
+                    className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-black transition ${
+                      viewMode === "grid"
+                        ? "bg-slate-950 text-white shadow-[0_12px_24px_rgba(15,23,42,0.24)]"
+                        : "bg-white/84 text-slate-700 shadow-[0_10px_20px_rgba(21,84,144,0.08)] hover:bg-white"
+                    }`}
+                  >
+                    <LuLayoutGrid className="h-4 w-4" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("spotlight")}
+                    className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-black transition ${
+                      viewMode === "spotlight"
+                        ? "bg-slate-950 text-white shadow-[0_12px_24px_rgba(15,23,42,0.24)]"
+                        : "bg-white/84 text-slate-700 shadow-[0_10px_20px_rgba(21,84,144,0.08)] hover:bg-white"
+                    }`}
+                  >
+                    <LuPanelsTopLeft className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
             </div>
+
+            {secondaryCategories.length > 0 ? (
+              <div className="rounded-[24px] border border-white/60 bg-white/58 px-4 py-4 shadow-[0_14px_28px_rgba(21,84,144,0.08)] backdrop-blur-md">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-black tracking-[0.18em] text-slate-500 uppercase">
+                    하위 카테고리
+                  </p>
+                  <span className="text-xs font-bold text-slate-500">
+                    {selectedPrimaryCategory?.name ?? "미선택"} 전체 포함
+                  </span>
+                </div>
+
+                <div className="scrollbar-none mt-3 flex gap-2 overflow-x-auto pb-1">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      selectedPrimaryCategoryId
+                        ? handleCategorySelect(selectedPrimaryCategoryId)
+                        : undefined
+                    }
+                    className={`shrink-0 rounded-full px-4 py-2.5 text-sm font-black transition ${
+                      !selectedSecondaryCategoryId
+                        ? "bg-sky-100 text-sky-950 shadow-[0_10px_20px_rgba(125,211,252,0.22)]"
+                        : "bg-white/84 text-slate-700 shadow-[0_10px_20px_rgba(21,84,144,0.08)] hover:bg-white"
+                    }`}
+                  >
+                    전체
+                  </button>
+
+                  {secondaryCategories.map((category) => {
+                    const isActive = selectedSecondaryCategoryId === category.id;
+
+                    return (
+                      <button
+                        key={category.id}
+                        type="button"
+                        onClick={() => handleCategorySelect(category.id)}
+                        className={`shrink-0 rounded-full px-4 py-2.5 text-sm font-black transition ${
+                          isActive
+                            ? "bg-slate-950 text-white shadow-[0_12px_24px_rgba(15,23,42,0.24)]"
+                            : "bg-white/84 text-slate-700 shadow-[0_10px_20px_rgba(21,84,144,0.08)] hover:bg-white"
+                        }`}
+                      >
+                        {category.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
           </div>
 
           {loadError ? (
@@ -285,13 +487,11 @@ export default function GalleryPage() {
                   </div>
                 ))}
               </div>
-            ) : categories.length === 0 ? (
-              <div className="event-panel-strong rounded-[28px] px-5 py-10 text-center text-sm font-bold text-slate-600">
-                먼저 카테고리를 만들어 주세요.
-              </div>
             ) : sections.length === 0 ? (
               <div className="event-panel-strong rounded-[28px] px-5 py-10 text-center text-sm font-bold text-slate-600">
-                선택한 카테고리에 공개된 이미지가 없습니다.
+                {selectedCategory
+                  ? "선택한 카테고리에 공개된 이미지가 없습니다."
+                  : "공개된 이미지가 없습니다."}
               </div>
             ) : (
               <div
@@ -301,8 +501,12 @@ export default function GalleryPage() {
               >
                 {sections.map((section) => (
                   <section
-                    key={section.id}
+                    key={`${section.id}:${selectedCategoryId ?? "all"}:${viewMode}`}
                     className="rounded-[28px] border border-sky-200/70 bg-white/58 p-4 shadow-[0_16px_34px_rgba(33,110,178,0.1)] backdrop-blur-md sm:p-5"
+                    style={{
+                      containIntrinsicSize: "1000px",
+                      contentVisibility: "auto",
+                    }}
                   >
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <h2 className="text-2xl font-black tracking-[-0.05em] break-words text-slate-950 sm:text-3xl">
@@ -314,10 +518,17 @@ export default function GalleryPage() {
                     </div>
 
                     <div className="mt-4">
-                      <ImageExhibitionGrid
-                        memories={section.memories}
-                        emptyMessage=""
-                      />
+                      {viewMode === "grid" ? (
+                        <ImageExhibitionGrid
+                          memories={section.memories}
+                          emptyMessage=""
+                        />
+                      ) : (
+                        <MainMemorySpotlight
+                          memories={section.memories}
+                          emptyMessage=""
+                        />
+                      )}
                     </div>
                   </section>
                 ))}

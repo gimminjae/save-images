@@ -152,123 +152,120 @@ export function MemoryDetailModal({
         }
       }}
     >
-      <button
-        type="button"
-        onClick={onClose}
-        className="absolute right-3 top-[calc(env(safe-area-inset-top)+0.75rem)] z-30 inline-flex h-11 items-center justify-center rounded-full border border-white/15 bg-black/35 px-4 text-sm font-black text-white shadow-[0_12px_28px_rgba(0,0,0,0.32)] backdrop-blur-xl transition hover:bg-white/18 sm:right-6 sm:top-6"
-      >
-        닫기
-      </button>
+      <div className="mx-auto flex min-h-dvh w-full max-w-[1800px] items-center justify-center px-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-[calc(env(safe-area-inset-top)+0.5rem)] sm:px-5 sm:pb-5 sm:pt-5">
+        <div className="flex w-full max-w-[1680px] flex-col gap-3 sm:gap-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="relative flex h-[min(74dvh,980px)] w-full items-center justify-center overflow-hidden rounded-[24px] border border-white/10 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.08),rgba(255,255,255,0.02)_52%,rgba(255,255,255,0))] shadow-[0_20px_60px_rgba(0,0,0,0.34)] sm:rounded-[32px]"
+            aria-label="이미지 닫기"
+          >
+            <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.12),rgba(0,0,0,0.03)_22%,rgba(0,0,0,0)_38%,rgba(0,0,0,0.12)_100%)]" />
+            <div className="flex h-full w-full items-center justify-center px-2 py-2 sm:px-4 sm:py-4">
+              <img
+                src={activeMemory.imageUrl}
+                alt={publicName}
+                className="relative z-10 max-h-full w-auto max-w-full object-contain shadow-[0_18px_40px_rgba(0,0,0,0.28)]"
+              />
+            </div>
+          </button>
 
-      <div className="mx-auto flex min-h-dvh w-full max-w-[1800px] items-center justify-center px-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-[calc(env(safe-area-inset-top)+3.6rem)] sm:px-5 sm:pb-5 sm:pt-18">
-        <div className="relative flex h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-4.4rem)] w-full items-center justify-center overflow-hidden rounded-[24px] border border-white/10 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.08),rgba(255,255,255,0.02)_52%,rgba(255,255,255,0))] shadow-[0_20px_60px_rgba(0,0,0,0.34)] sm:h-[calc(100dvh-3rem)] sm:rounded-[32px]">
-          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.18),rgba(0,0,0,0.04)_22%,rgba(0,0,0,0)_38%,rgba(0,0,0,0.18)_100%)]" />
-          <div className="flex h-full w-full items-center justify-center px-2 py-2 sm:px-4 sm:py-4">
-            <img
-              src={memory.imageUrl}
-              alt={publicName}
-              className="relative z-10 max-h-full w-auto max-w-full rounded-[18px] object-contain shadow-[0_18px_40px_rgba(0,0,0,0.28)] sm:rounded-[24px]"
-            />
-          </div>
-
-          <div className="pointer-events-none absolute inset-x-2 bottom-2 z-20 sm:inset-x-5 sm:bottom-5">
-            <div className="pointer-events-auto mx-auto max-w-4xl rounded-[22px] border border-white/12 bg-[linear-gradient(180deg,rgba(7,14,30,0.76),rgba(7,14,30,0.46))] px-4 py-3 shadow-[0_18px_42px_rgba(0,0,0,0.32)] backdrop-blur-2xl sm:rounded-[28px] sm:px-5 sm:py-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-lg font-black tracking-[-0.05em] text-white sm:text-2xl">
-                    {publicName}
-                  </p>
-                  <p className="mt-1 text-xs font-medium text-white/68 sm:text-sm">
-                    {formatter.format(activeMemory.createdAt)}
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <a
-                    href={`/api/memories/download/${activeMemory.id}`}
-                    className="inline-flex h-10 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/12 px-4 text-sm font-black text-white shadow-[0_12px_28px_rgba(0,0,0,0.2)] transition hover:bg-white/18"
-                  >
-                    이미지 다운로드
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      void updateMainFeature(!activeMemory.isMainFeatured)
-                    }
-                    disabled={isUpdatingMainFeature}
-                    className={`inline-flex h-10 shrink-0 items-center justify-center rounded-full border px-4 text-sm font-black text-white shadow-[0_12px_28px_rgba(0,0,0,0.2)] transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                      activeMemory.isMainFeatured
-                        ? "border-rose-300/40 bg-rose-500/28 hover:bg-rose-500/36"
-                        : "border-emerald-300/35 bg-emerald-500/24 hover:bg-emerald-500/32"
-                    }`}
-                  >
-                    {isUpdatingMainFeature
-                      ? "변경 중..."
-                      : activeMemory.isMainFeatured
-                        ? "홈화면 게시 해제"
-                        : "홈화면 게시"}
-                  </button>
-                </div>
+          <div className="mx-auto w-full max-w-5xl rounded-[22px] border border-white/12 bg-[linear-gradient(180deg,rgba(7,14,30,0.76),rgba(7,14,30,0.46))] px-4 py-3 shadow-[0_18px_42px_rgba(0,0,0,0.32)] backdrop-blur-2xl sm:rounded-[28px] sm:px-5 sm:py-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-lg font-black tracking-[-0.05em] text-white sm:text-2xl">
+                  {publicName}
+                </p>
+                <p className="mt-1 text-xs font-medium text-white/68 sm:text-sm">
+                  {formatter.format(activeMemory.createdAt)}
+                </p>
               </div>
 
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <span
-                  className={`rounded-full px-3 py-1 text-[0.72rem] font-black tracking-[0.08em] ${
+              <div className="flex flex-wrap items-center gap-2">
+                <a
+                  href={`/api/memories/download/${activeMemory.id}`}
+                  className="inline-flex h-10 shrink-0 items-center justify-center rounded-full border border-white/90 bg-white/92 px-4 text-sm font-black whitespace-nowrap text-slate-950 shadow-[0_12px_28px_rgba(0,0,0,0.2)] transition hover:bg-white"
+                >
+                  이미지 다운로드
+                </a>
+                <button
+                  type="button"
+                  onClick={() =>
+                    void updateMainFeature(!activeMemory.isMainFeatured)
+                  }
+                  disabled={isUpdatingMainFeature}
+                  className={`inline-flex h-10 shrink-0 items-center justify-center rounded-full border px-4 text-sm font-black text-white shadow-[0_12px_28px_rgba(0,0,0,0.2)] transition disabled:cursor-not-allowed disabled:opacity-60 ${
                     activeMemory.isMainFeatured
-                      ? "bg-fuchsia-200/25 text-fuchsia-50"
-                      : "bg-white/10 text-white/70"
+                      ? "border-rose-300/40 bg-rose-500/28 hover:bg-rose-500/36"
+                      : "border-emerald-300/35 bg-emerald-500/24 hover:bg-emerald-500/32"
                   }`}
                 >
-                  {activeMemory.isMainFeatured
-                    ? "홈화면 게시 중"
-                    : "홈화면 미게시"}
-                </span>
-                {manageMessage ? (
-                  <span className="rounded-full bg-emerald-300/18 px-3 py-1 text-[0.72rem] font-black text-emerald-50">
-                    {manageMessage}
-                  </span>
-                ) : null}
+                  {isUpdatingMainFeature
+                    ? "변경 중..."
+                    : activeMemory.isMainFeatured
+                      ? "홈화면 게시 해제"
+                      : "홈화면 게시"}
+                </button>
               </div>
+            </div>
 
-              {showManageAuth ? (
-                <form
-                  className="mt-3 flex flex-col gap-2 sm:flex-row"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void updateMainFeature(!activeMemory.isMainFeatured);
-                  }}
-                >
-                  <input
-                    type="password"
-                    value={managePassword}
-                    onChange={(event) => setManagePassword(event.target.value)}
-                    placeholder="관리자 비밀번호"
-                    className="h-11 min-w-0 flex-1 rounded-full border border-white/14 bg-black/28 px-4 text-sm text-white outline-none placeholder:text-white/45"
-                  />
-                  <button
-                    type="submit"
-                    disabled={isUpdatingMainFeature || !managePassword.trim()}
-                    className="inline-flex h-11 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/12 px-4 text-sm font-black text-white transition disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    인증 후 변경
-                  </button>
-                </form>
-              ) : null}
-
-              {manageError ? (
-                <div className="mt-3 rounded-[18px] border border-rose-300/24 bg-rose-500/14 px-4 py-3 text-sm text-rose-50">
-                  {manageError}
-                </div>
-              ) : null}
-
-              {activeMemory.description ? (
-                <div className="mt-3 max-h-[18vh] overflow-y-auto pr-1 sm:max-h-[22vh]">
-                  <p className="whitespace-pre-line text-sm leading-6 text-white/88 sm:text-base sm:leading-7">
-                    {activeMemory.description}
-                  </p>
-                </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span
+                className={`rounded-full px-3 py-1 text-[0.72rem] font-black tracking-[0.08em] ${
+                  activeMemory.isMainFeatured
+                    ? "bg-fuchsia-200/25 text-fuchsia-50"
+                    : "bg-white/10 text-white/70"
+                }`}
+              >
+                {activeMemory.isMainFeatured
+                  ? "홈화면 게시 중"
+                  : "홈화면 미게시"}
+              </span>
+              {manageMessage ? (
+                <span className="rounded-full bg-emerald-300/18 px-3 py-1 text-[0.72rem] font-black text-emerald-50">
+                  {manageMessage}
+                </span>
               ) : null}
             </div>
+
+            {showManageAuth ? (
+              <form
+                className="mt-3 flex flex-col gap-2 sm:flex-row"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void updateMainFeature(!activeMemory.isMainFeatured);
+                }}
+              >
+                <input
+                  type="password"
+                  value={managePassword}
+                  onChange={(event) => setManagePassword(event.target.value)}
+                  placeholder="관리자 비밀번호"
+                  className="h-11 min-w-0 flex-1 rounded-full border border-white/14 bg-black/28 px-4 text-sm text-white outline-none placeholder:text-white/45"
+                />
+                <button
+                  type="submit"
+                  disabled={isUpdatingMainFeature || !managePassword.trim()}
+                  className="inline-flex h-11 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/12 px-4 text-sm font-black text-white transition disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  인증 후 변경
+                </button>
+              </form>
+            ) : null}
+
+            {manageError ? (
+              <div className="mt-3 rounded-[18px] border border-rose-300/24 bg-rose-500/14 px-4 py-3 text-sm text-rose-50">
+                {manageError}
+              </div>
+            ) : null}
+
+            {activeMemory.description ? (
+              <div className="mt-3 max-h-[18vh] overflow-y-auto pr-1 sm:max-h-[22vh]">
+                <p className="whitespace-pre-line text-sm leading-6 text-white/88 sm:text-base sm:leading-7">
+                  {activeMemory.description}
+                </p>
+              </div>
+            ) : null}
           </div>
         </div>
       </div>

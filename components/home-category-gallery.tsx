@@ -99,6 +99,7 @@ export function HomeCategoryGallery({
         <MainMemorySpotlight
           memories={displayMemories}
           emptyMessage="메인 설정된 이미지가 없습니다."
+          syncMainFeatureVisibility
         />
       </div>
     </>

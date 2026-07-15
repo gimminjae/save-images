@@ -1,36 +1,18 @@
-import Link from "next/link";
-
 import { EventSceneBackdrop } from "@/components/event-scene-backdrop";
 import { FloatingUploadButton } from "@/components/floating-upload-button";
-
-const navItems = [
-  { href: "/", label: "메인" },
-  { href: "/gallery", label: "이미지" },
-  { href: "/upload", label: "업로드" },
-];
 
 type SiteShellProps = {
   children: React.ReactNode;
   currentPath: string;
-  showHeader?: boolean;
   showBackdrop?: boolean;
   fullBleed?: boolean;
   mainClassName?: string;
   contentClassName?: string;
 };
 
-function isActive(currentPath: string, href: string) {
-  if (href === "/") {
-    return currentPath === "/";
-  }
-
-  return currentPath.startsWith(href);
-}
-
 export function SiteShell({
   children,
   currentPath,
-  showHeader = true,
   showBackdrop = true,
   fullBleed = false,
   mainClassName = "",
@@ -48,41 +30,9 @@ export function SiteShell({
           fullBleed ? "max-w-none gap-0" : "max-w-7xl gap-4 sm:gap-5"
         } ${contentClassName}`}
       >
-        {showHeader ? (
-          <header className="event-panel rounded-[28px] px-4 py-4 sm:rounded-[30px] sm:px-6">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <Link
-                href="/"
-                className="text-[1.9rem] font-black tracking-[-0.06em] text-slate-950 sm:text-2xl"
-              >
-                Hanmong Archive
-              </Link>
-              <nav className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:justify-end">
-                {navItems.map((item) => {
-                  const active = isActive(currentPath, item.href);
-
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className={`min-w-0 whitespace-nowrap rounded-full px-3 py-2 text-center text-[0.82rem] font-black transition sm:px-4 sm:text-sm ${
-                        active
-                          ? "bg-sky-500 text-white shadow-[0_12px_24px_rgba(33,110,178,0.16)]"
-                          : "bg-white/85 text-slate-700"
-                      }`}
-                    >
-                      {item.label}
-                    </Link>
-                  );
-                })}
-              </nav>
-            </div>
-          </header>
-        ) : null}
-
         {children}
       </div>
-      <FloatingUploadButton hidden={currentPath.startsWith("/upload")} />
+      <FloatingUploadButton currentPath={currentPath} />
     </main>
   );
 }

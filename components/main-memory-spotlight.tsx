@@ -4,34 +4,66 @@
 
 import { useMemo, useState } from "react";
 import { MemoryDetailModal } from "@/components/memory-detail-modal";
+import { useProgressiveReveal } from "@/components/use-progressive-reveal";
 import { getPublicMemoryDisplayName } from "@/lib/memory-records";
 import type { MemoryRecord } from "@/types/memory";
 
 type MainMemorySpotlightProps = {
   emptyMessage: string;
   memories: MemoryRecord[];
+  syncMainFeatureVisibility?: boolean;
 };
 
 function getCardLayoutClassName(index: number) {
-  switch (index % 6) {
+  switch (index % 8) {
     case 0:
-      return "sm:translate-y-5";
+      return "sm:mt-8 xl:mt-12";
     case 1:
-      return "lg:-translate-y-4";
+      return "lg:mt-6 2xl:mt-10";
     case 2:
-      return "xl:translate-y-8";
+      return "sm:mt-3 xl:mt-16";
     case 3:
-      return "sm:-translate-y-2";
+      return "lg:mt-10";
     case 4:
-      return "lg:translate-y-4";
+      return "sm:mt-10 xl:mt-4";
+    case 5:
+      return "2xl:mt-14";
+    case 6:
+      return "sm:mt-4 lg:mt-12";
     default:
       return "";
+  }
+}
+
+function getCardTiltClassName(index: number) {
+  switch (index % 10) {
+    case 0:
+      return "rotate-[-0.8deg] sm:rotate-[-1.2deg]";
+    case 1:
+      return "rotate-[0.6deg] sm:rotate-[1deg]";
+    case 2:
+      return "rotate-[-0.4deg] sm:rotate-[-0.9deg]";
+    case 3:
+      return "rotate-[0.9deg] sm:rotate-[1.3deg]";
+    case 4:
+      return "rotate-[-0.6deg] sm:rotate-[-1deg]";
+    case 5:
+      return "rotate-[0.4deg] sm:rotate-[0.8deg]";
+    case 6:
+      return "rotate-[-0.9deg] sm:rotate-[-1.4deg]";
+    case 7:
+      return "rotate-[0.7deg] sm:rotate-[1.1deg]";
+    case 8:
+      return "rotate-[-0.5deg] sm:rotate-[-0.8deg]";
+    default:
+      return "rotate-[0.3deg] sm:rotate-[0.7deg]";
   }
 }
 
 export function MainMemorySpotlight({
   emptyMessage,
   memories,
+  syncMainFeatureVisibility = false,
 }: MainMemorySpotlightProps) {
   const [selectedMemory, setSelectedMemory] = useState<MemoryRecord | null>(
     null,
@@ -50,6 +82,14 @@ export function MainMemorySpotlight({
         .map((memory) => memoryOverrides[memory.id] ?? memory),
     [hiddenMemoryIds, memories, memoryOverrides],
   );
+  const { hasMore, sentinelRef, visibleCount } = useProgressiveReveal(
+    displayedMemories.length,
+    {
+      initialCount: 20,
+      step: 15,
+    },
+  );
+  const visibleMemories = displayedMemories.slice(0, visibleCount);
 
   if (displayedMemories.length === 0) {
     return (
@@ -61,10 +101,10 @@ export function MainMemorySpotlight({
 
   return (
     <>
-      <div className="relative">
-        <div className="pointer-events-none absolute inset-x-5 top-0 h-20 rounded-full bg-white/35 blur-3xl sm:inset-x-10 sm:h-24" />
-        <div className="columns-2 gap-2.5 sm:gap-5 lg:columns-3 xl:columns-4">
-          {displayedMemories.map((memory, index) => {
+      <div className="relative mx-auto w-full max-w-[1680px]">
+        <div className="pointer-events-none absolute inset-x-4 top-0 h-20 rounded-full bg-white/28 blur-3xl sm:inset-x-10 sm:h-24" />
+        <div className="grid grid-cols-2 items-start gap-x-3 gap-y-5 sm:gap-x-6 sm:gap-y-8 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+          {visibleMemories.map((memory, index) => {
             const publicName = getPublicMemoryDisplayName(memory);
             const ratio =
               memory.imageWidth && memory.imageHeight
@@ -74,24 +114,25 @@ export function MainMemorySpotlight({
             return (
               <div
                 key={memory.id}
-                className={`mb-2.5 break-inside-avoid sm:mb-5 ${getCardLayoutClassName(index)}`}
+                className={`self-start ${getCardLayoutClassName(index)}`}
               >
                 <button
                   type="button"
                   onClick={() => setSelectedMemory(memory)}
-                  className="group block w-full overflow-hidden rounded-[18px] border border-white/80 bg-white/90 p-1 text-left shadow-[0_20px_40px_rgba(15,76,129,0.12)] ring-1 ring-sky-100/70 transition duration-300 hover:-translate-y-1 hover:shadow-[0_30px_48px_rgba(15,76,129,0.18)] sm:rounded-[32px]"
+                  className={`group block w-full overflow-hidden bg-transparent p-0 text-left shadow-[0_20px_40px_rgba(8,18,44,0.2)] transition duration-300 hover:-translate-y-1 hover:rotate-0 hover:shadow-[0_30px_48px_rgba(8,18,44,0.28)] ${getCardTiltClassName(index)}`}
                 >
                   <div
-                    className="overflow-hidden rounded-[14px] bg-[linear-gradient(180deg,rgba(232,251,255,0.95),rgba(255,255,255,0.78))] sm:rounded-[24px]"
+                    className="overflow-hidden bg-transparent"
                     style={{ aspectRatio: ratio }}
                   >
                     <img
-                      src={memory.imageUrl}
+                      src={memory.thumbnailUrl ?? memory.imageUrl}
                       alt={publicName}
                       width={memory.imageWidth}
                       height={memory.imageHeight}
+                      loading={index < 5 ? "eager" : "lazy"}
+                      decoding="async"
                       className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.025]"
-                      loading="lazy"
                     />
                   </div>
                 </button>
@@ -99,6 +140,14 @@ export function MainMemorySpotlight({
             );
           })}
         </div>
+
+        {hasMore ? (
+          <div
+            ref={sentinelRef}
+            aria-hidden="true"
+            className="mt-5 h-8 w-full rounded-full"
+          />
+        ) : null}
       </div>
 
       <MemoryDetailModal
@@ -111,6 +160,10 @@ export function MainMemorySpotlight({
             ...current,
             [updatedMemory.id]: updatedMemory,
           }));
+
+          if (!syncMainFeatureVisibility) {
+            return;
+          }
 
           if (updatedMemory.isMainFeatured) {
             setHiddenMemoryIds((current) => {

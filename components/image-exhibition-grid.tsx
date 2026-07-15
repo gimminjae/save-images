@@ -4,6 +4,7 @@
 
 import { useState } from "react";
 import { MemoryDetailModal } from "@/components/memory-detail-modal";
+import { useProgressiveReveal } from "@/components/use-progressive-reveal";
 import type { MemoryRecord } from "@/types/memory";
 
 type ImageExhibitionGridProps = {
@@ -34,6 +35,14 @@ export function ImageExhibitionGrid({
   const [selectedMemory, setSelectedMemory] = useState<MemoryRecord | null>(
     null,
   );
+  const { hasMore, sentinelRef, visibleCount } = useProgressiveReveal(
+    memories.length,
+    {
+      initialCount: 24,
+      step: 18,
+    },
+  );
+  const visibleMemories = memories.slice(0, visibleCount);
 
   if (memories.length === 0) {
     return (
@@ -46,7 +55,7 @@ export function ImageExhibitionGrid({
   return (
     <>
       <div className="grid grid-cols-2 auto-rows-[120px] gap-3 sm:auto-rows-[220px] sm:gap-4 lg:grid-cols-4 lg:auto-rows-[230px]">
-        {memories.map((memory, index) => (
+        {visibleMemories.map((memory, index) => (
           <button
             key={memory.id}
             type="button"
@@ -54,21 +63,24 @@ export function ImageExhibitionGrid({
             className={`group relative overflow-hidden rounded-[18px] border border-white/70 bg-white text-left shadow-[0_18px_34px_rgba(25,102,165,0.12)] transition hover:-translate-y-1 hover:shadow-[0_24px_42px_rgba(25,102,165,0.18)] sm:rounded-[28px] ${getTileClassName(index)}`}
           >
             <img
-              src={memory.imageUrl}
+              src={memory.thumbnailUrl ?? memory.imageUrl}
               alt={memory.name}
+              loading={index < 6 ? "eager" : "lazy"}
+              decoding="async"
               className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
             />
             <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(6,23,42,0.02),rgba(6,23,42,0.16),rgba(6,23,42,0.7))]" />
-            <div className="absolute inset-x-0 bottom-0 p-3 text-white sm:p-4">
-              {memory.category?.name ? (
-                <p className="text-xs font-black tracking-[0.08em] text-white/75">
-                  {memory.category.name}
-                </p>
-              ) : null}
-            </div>
           </button>
         ))}
       </div>
+
+      {hasMore ? (
+        <div
+          ref={sentinelRef}
+          aria-hidden="true"
+          className="mt-4 h-8 w-full rounded-full"
+        />
+      ) : null}
 
       <MemoryDetailModal
         key={selectedMemory?.id ?? "memory-detail-empty"}

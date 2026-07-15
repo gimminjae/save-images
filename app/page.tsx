@@ -2,6 +2,7 @@
 
 import { startTransition, useEffect, useMemo, useState } from "react";
 import { ConfigurationNotice } from "@/components/configuration-notice";
+import { EventSceneBackdrop } from "@/components/event-scene-backdrop";
 import { HomeCategoryGallery } from "@/components/home-category-gallery";
 import { SiteShell } from "@/components/site-shell";
 import {
@@ -16,25 +17,10 @@ import type { MemoryRecord } from "@/types/memory";
 function HomeScene({ children }: { children: React.ReactNode }) {
   return (
     <section className="relative min-h-[100svh] overflow-hidden px-3 py-6 sm:px-8 sm:py-10">
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 bg-[url('/main-page-background.jpg')] bg-cover bg-center"
-      />
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(8,16,38,0.08)_0%,rgba(8,16,38,0.14)_28%,rgba(5,12,31,0.34)_56%,rgba(4,9,24,0.68)_82%,rgba(2,6,18,0.82)_100%)]"
-      />
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.06)_0%,rgba(255,255,255,0.02)_24%,rgba(0,0,0,0)_46%,rgba(3,8,24,0.24)_100%)]"
-      />
-      <div
-        aria-hidden="true"
-        className="absolute inset-x-0 bottom-0 h-48 bg-[linear-gradient(180deg,rgba(112,244,255,0),rgba(112,244,255,0.12)_60%,rgba(146,255,205,0.16)_100%)]"
-      />
+      <EventSceneBackdrop />
 
-      <div className="relative z-10 mx-auto flex min-h-[100svh] w-full max-w-7xl flex-col gap-6 sm:gap-8">
-        <div className="mx-auto flex w-full max-w-4xl flex-1 items-center justify-center pt-3 sm:max-w-5xl sm:pt-12">
+      <div className="relative z-10 mx-auto flex min-h-[100svh] w-full max-w-[1760px] flex-col gap-6 sm:gap-8">
+        <div className="mx-auto flex w-full max-w-4xl flex-1 items-center justify-center pt-3 sm:max-w-6xl sm:pt-12">
           <div className="w-full text-center">
             <h1 className="text-[clamp(1.9rem,8vw,4.4rem)] font-black tracking-[-0.08em] text-white drop-shadow-[0_10px_35px_rgba(8,18,44,0.55)] sm:leading-[0.95]">
               <span className="block text-white/92">제 16기</span>
@@ -122,7 +108,6 @@ export default function Home() {
   return (
     <SiteShell
       currentPath="/"
-      showHeader={false}
       showBackdrop={false}
       fullBleed
     >
