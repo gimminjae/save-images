@@ -34,6 +34,7 @@ type LoadedImageMeta = {
 };
 
 const MAX_VISIBLE_MEMORIES = 15;
+const MOBILE_VISIBLE_MEMORIES = 15;
 const SHUFFLE_DURATION_MS = 820;
 const SLOT_SELECTION_ORDER = [0, 5, 10, 14, 6, 7, 12, 1, 4, 8, 9, 2, 3, 11, 13];
 
@@ -53,6 +54,24 @@ const ORBIT_SLOTS: OrbitSlot[] = [
   { id: "south-center", left: 50, top: 91, rotation: 2, width: "clamp(127px, 16.1vw, 271px)", zIndex: 5 },
   { id: "south-east-inner", left: 69, top: 89, rotation: 6, width: "clamp(120px, 14.6vw, 257px)", zIndex: 4 },
   { id: "south-east-outer", left: 85, top: 84, rotation: -7, width: "clamp(137px, 17.5vw, 298px)", zIndex: 5 },
+];
+
+const MOBILE_ORBIT_SLOTS: OrbitSlot[] = [
+  { id: "mobile-top-left-outer", left: 20, top: 13.5, rotation: -9, width: "clamp(82px, 21vw, 118px)", zIndex: 1 },
+  { id: "mobile-top-left-inner", left: 39, top: 11.5, rotation: 6, width: "clamp(74px, 19vw, 104px)", zIndex: 1 },
+  { id: "mobile-top-right-inner", left: 61, top: 11.5, rotation: -5, width: "clamp(74px, 19vw, 104px)", zIndex: 1 },
+  { id: "mobile-top-right-outer", left: 80, top: 13.5, rotation: 8, width: "clamp(82px, 21vw, 118px)", zIndex: 1 },
+  { id: "mobile-upper-left-outer", left: 14, top: 23.5, rotation: -8, width: "clamp(92px, 23vw, 128px)", zIndex: 2 },
+  { id: "mobile-upper-right-outer", left: 86, top: 23.5, rotation: 8, width: "clamp(92px, 23vw, 128px)", zIndex: 2 },
+  { id: "mobile-title-left", left: 13, top: 35.5, rotation: -7, width: "clamp(102px, 26vw, 144px)", zIndex: 3 },
+  { id: "mobile-title-right", left: 87, top: 35.5, rotation: 7, width: "clamp(102px, 26vw, 144px)", zIndex: 3 },
+  { id: "mobile-mid-left", left: 24, top: 45.5, rotation: -6, width: "clamp(90px, 23vw, 126px)", zIndex: 3 },
+  { id: "mobile-mid-right", left: 76, top: 45.5, rotation: 6, width: "clamp(90px, 23vw, 126px)", zIndex: 3 },
+  { id: "mobile-lower-left-outer", left: 17, top: 55.5, rotation: -5, width: "clamp(96px, 24vw, 132px)", zIndex: 4 },
+  { id: "mobile-lower-right-outer", left: 83, top: 55.5, rotation: 5, width: "clamp(96px, 24vw, 132px)", zIndex: 4 },
+  { id: "mobile-bottom-left", left: 30, top: 64.5, rotation: 6, width: "clamp(92px, 23vw, 126px)", zIndex: 5 },
+  { id: "mobile-bottom-center", left: 50, top: 67.5, rotation: -1, width: "clamp(98px, 24vw, 136px)", zIndex: 5 },
+  { id: "mobile-bottom-right", left: 70, top: 64.5, rotation: -6, width: "clamp(92px, 23vw, 126px)", zIndex: 5 },
 ];
 
 function createSeededRandom(seed: number) {
@@ -166,15 +185,56 @@ function getMemoryImageUrl(memory: MemoryRecord) {
   return memory.thumbnailUrl ?? memory.imageUrl;
 }
 
+function getFallbackAspectRatio(index: number) {
+  return index % 3 === 0 ? "4 / 5" : "5 / 4";
+}
+
+function getMemoryVisualMeta(
+  memory: MemoryRecord,
+  loadedImageMeta: LoadedImageMeta | undefined,
+  fallbackIndex: number,
+) {
+  const publicName = getPublicMemoryDisplayName(memory);
+  const imageUrl = getMemoryImageUrl(memory);
+  const imageWidth =
+    typeof memory.imageWidth === "number" && memory.imageWidth > 0
+      ? memory.imageWidth
+      : loadedImageMeta?.width;
+  const imageHeight =
+    typeof memory.imageHeight === "number" && memory.imageHeight > 0
+      ? memory.imageHeight
+      : loadedImageMeta?.height;
+  const aspectRatio =
+    imageWidth && imageHeight
+      ? `${imageWidth} / ${imageHeight}`
+      : getFallbackAspectRatio(fallbackIndex);
+
+  return {
+    aspectRatio,
+    hasKnownDimensions: Boolean(imageWidth && imageHeight),
+    imageHeight,
+    imageUrl,
+    imageWidth,
+    isImageReady: Boolean(loadedImageMeta),
+    publicName,
+  };
+}
+
+function buildMobileAssignments(assignments: SlotAssignment[]) {
+  return assignments
+    .slice(0, MOBILE_VISIBLE_MEMORIES)
+    .map((assignment, index) => ({
+      memory: assignment.memory,
+      slot: MOBILE_ORBIT_SLOTS[index],
+    }));
+}
+
 export function HomeMemoryOrbit({
   memories,
   isLoading = false,
   emptyMessage = "메인 전시 이미지가 없습니다.",
 }: HomeMemoryOrbitProps) {
   const [selectedMemory, setSelectedMemory] = useState<MemoryRecord | null>(null);
-  const [hoveredAssignmentKey, setHoveredAssignmentKey] = useState<string | null>(
-    null,
-  );
   const [isPreparingShuffle, setIsPreparingShuffle] = useState(false);
   const [loadedImages, setLoadedImages] = useState<
     Record<string, LoadedImageMeta>
@@ -352,7 +412,6 @@ export function HomeMemoryOrbit({
     shuffleRequestRef.current = requestId;
 
     setShuffleVersion(nextVersion);
-    setHoveredAssignmentKey(null);
     setIsPreparingShuffle(true);
 
     await Promise.all(
@@ -392,11 +451,213 @@ export function HomeMemoryOrbit({
   const placeholderSlots = SLOT_SELECTION_ORDER.slice(0, MAX_VISIBLE_MEMORIES).map(
     (slotIndex) => ORBIT_SLOTS[slotIndex],
   );
+  const mobileOrbitAssignments = buildMobileAssignments(orbitAssignments);
+  const mobileIncomingAssignments = incomingAssignments
+    ? buildMobileAssignments(incomingAssignments)
+    : null;
+  const mobilePlaceholderSlots = MOBILE_ORBIT_SLOTS.slice(0, MOBILE_VISIBLE_MEMORIES);
+
+  const titlePanel = (
+    <div className="mx-auto w-full max-w-[720px] rounded-[28px] bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.12),rgba(255,255,255,0.02)_58%,rgba(255,255,255,0))] px-4 py-5 text-center shadow-[0_28px_90px_rgba(0,0,0,0.22)] sm:rounded-[30px] sm:px-8 sm:py-8">
+      <p className="text-[clamp(1.35rem,5.4vw,3.9rem)] font-black tracking-[-0.07em] text-white/92 drop-shadow-[0_10px_24px_rgba(6,10,30,0.34)]">
+        제 16기
+      </p>
+      <h1 className="mt-2 text-[clamp(2.05rem,11vw,7.2rem)] font-black leading-[0.95] tracking-[-0.09em] text-white drop-shadow-[0_16px_42px_rgba(6,10,30,0.46)]">
+        한몽 청년수련회
+      </h1>
+
+      <div className="pointer-events-auto mt-5 flex flex-col items-center gap-3 sm:mt-6">
+        <button
+          type="button"
+          onClick={() => {
+            void handleShuffle();
+          }}
+          disabled={
+            isLoading ||
+            isAnimating ||
+            isPreparingShuffle ||
+            featuredMemories.length < 2
+          }
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-white/24 bg-white/12 px-5 text-sm font-black text-white shadow-[0_16px_36px_rgba(0,0,0,0.18)] backdrop-blur-md transition hover:bg-white/18 disabled:cursor-not-allowed disabled:opacity-55 sm:h-13 sm:px-6 sm:text-base"
+        >
+          <RiShuffleLine
+            className={isAnimating || isPreparingShuffle ? "animate-spin" : ""}
+          />
+          <span>
+            {isPreparingShuffle
+              ? "이미지 준비 중..."
+              : isAnimating
+                ? "전시 교체 중..."
+                : "셔플"}
+          </span>
+        </button>
+
+        {!isLoading && !hasMemories ? (
+          <p className="text-sm font-bold text-white/72 sm:text-base">
+            {emptyMessage}
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
+
+  function renderMobileOrbit(assignments: SlotAssignment[], interactive: boolean) {
+    return assignments.map((assignment, index) => {
+      const loadedImageMeta = loadedImages[getMemoryImageUrl(assignment.memory)];
+      const {
+        aspectRatio,
+        hasKnownDimensions,
+        imageHeight,
+        imageUrl,
+        imageWidth,
+        isImageReady,
+        publicName,
+      } = getMemoryVisualMeta(assignment.memory, loadedImageMeta, index);
+
+      return (
+        <div
+          key={`${interactive ? "mobile-active" : "mobile-incoming"}-${assignment.memory.id}-${assignment.slot.id}`}
+          className={`absolute transform-gpu transition-[opacity,transform,filter] duration-[820ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
+            interactive ? getActiveLayerClasses(isAnimating, showIncoming) : getIncomingLayerClasses(showIncoming)
+          }`}
+          style={{
+            left: `${assignment.slot.left}%`,
+            top: `${assignment.slot.top}%`,
+            transform: `translate(-50%, -50%) rotate(${assignment.slot.rotation}deg)`,
+            zIndex: interactive ? assignment.slot.zIndex : assignment.slot.zIndex + 10,
+          }}
+        >
+          {interactive ? (
+            <button
+              type="button"
+              onClick={() => setSelectedMemory(assignment.memory)}
+              aria-label={`${publicName} 상세 보기`}
+              className="group block overflow-hidden bg-transparent p-0 text-left shadow-[0_18px_48px_rgba(0,0,0,0.26)] transition-[transform,box-shadow,filter] duration-[760ms] ease-[cubic-bezier(0.16,1,0.3,1)] active:scale-[0.985]"
+              style={{
+                width: assignment.slot.width,
+              }}
+            >
+              <div
+                className="relative overflow-hidden bg-white/[0.05]"
+                style={{ aspectRatio }}
+              >
+                <div
+                  aria-hidden="true"
+                  className={`absolute inset-0 bg-white/[0.08] transition-opacity duration-500 ${
+                    isImageReady ? "opacity-0" : "animate-pulse opacity-100"
+                  }`}
+                />
+                <img
+                  src={imageUrl}
+                  alt={publicName}
+                  width={imageWidth}
+                  height={imageHeight}
+                  loading={index < 4 ? "eager" : "lazy"}
+                  decoding="async"
+                  fetchPriority={index < 4 ? "high" : "auto"}
+                  onLoad={(event) =>
+                    registerLoadedImage(
+                      imageUrl,
+                      event.currentTarget.naturalWidth,
+                      event.currentTarget.naturalHeight,
+                    )
+                  }
+                  className={`relative z-10 block w-full transform-gpu transition-[opacity,transform,filter] duration-[760ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                    isImageReady ? "opacity-100" : "opacity-0"
+                  } ${
+                    hasKnownDimensions ? "h-full object-cover" : "h-auto"
+                  }`}
+                />
+              </div>
+            </button>
+          ) : (
+            <div
+              className="overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.24)]"
+              style={{
+                width: assignment.slot.width,
+              }}
+            >
+              <div
+                className="relative overflow-hidden bg-white/[0.05]"
+                style={{ aspectRatio }}
+              >
+                <div
+                  aria-hidden="true"
+                  className={`absolute inset-0 bg-white/[0.08] transition-opacity duration-500 ${
+                    isImageReady ? "opacity-0" : "animate-pulse opacity-100"
+                  }`}
+                />
+                <img
+                  src={imageUrl}
+                  alt={publicName}
+                  width={imageWidth}
+                  height={imageHeight}
+                  loading={index < 4 ? "eager" : "lazy"}
+                  decoding="async"
+                  fetchPriority={index < 4 ? "high" : "auto"}
+                  onLoad={(event) =>
+                    registerLoadedImage(
+                      imageUrl,
+                      event.currentTarget.naturalWidth,
+                      event.currentTarget.naturalHeight,
+                    )
+                  }
+                  className={`relative z-10 block w-full transition-opacity duration-500 ${
+                    isImageReady ? "opacity-100" : "opacity-0"
+                  } ${
+                    hasKnownDimensions ? "h-full object-cover" : "h-auto"
+                  }`}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    });
+  }
 
   return (
     <>
-      <section className="relative flex min-h-[100svh] w-full items-center justify-center">
-        <div className="relative h-[min(92svh,1040px)] min-h-[620px] w-full max-w-[1820px] sm:min-h-[720px]">
+      <section className="relative flex min-h-[100svh] w-full items-start justify-center lg:items-center">
+        <div className="relative mx-auto block h-[min(112svh,980px)] min-h-[820px] w-full max-w-[520px] px-2 pt-4 sm:px-4 sm:pt-6 lg:hidden">
+          {isLoading ? (
+            mobilePlaceholderSlots.map((slot, index) => (
+              <div
+                key={`mobile-placeholder-${slot.id}`}
+                className="absolute transform-gpu"
+                style={{
+                  left: `${slot.left}%`,
+                  top: `${slot.top}%`,
+                  transform: `translate(-50%, -50%) rotate(${slot.rotation}deg)`,
+                  zIndex: slot.zIndex,
+                }}
+              >
+                <div
+                  className="overflow-hidden bg-white/[0.08] shadow-[0_18px_48px_rgba(0,0,0,0.22)] animate-pulse"
+                  style={{
+                    width: slot.width,
+                    aspectRatio: getFallbackAspectRatio(index),
+                  }}
+                />
+              </div>
+            ))
+          ) : hasMemories ? (
+            <>
+              {renderMobileOrbit(mobileOrbitAssignments, true)}
+              {mobileIncomingAssignments ? (
+                <div className="pointer-events-none absolute inset-0">
+                  {renderMobileOrbit(mobileIncomingAssignments, false)}
+                </div>
+              ) : null}
+            </>
+          ) : null}
+
+          <div className="pointer-events-none absolute left-1/2 top-[31%] z-[30] w-[min(86vw,350px)] -translate-x-1/2 -translate-y-1/2">
+            {titlePanel}
+          </div>
+        </div>
+
+        <div className="relative hidden h-[min(92svh,1040px)] min-h-[720px] w-full max-w-[1820px] lg:block">
           {isLoading
             ? placeholderSlots.map((slot, index) => (
                 <div
@@ -422,8 +683,6 @@ export function HomeMemoryOrbit({
 
           {!isLoading
             ? orbitAssignments.map((assignment, index) => {
-                const assignmentKey = `${assignment.slot.id}-${assignment.memory.id}`;
-                const isHovered = hoveredAssignmentKey === assignmentKey;
                 const imageUrl = getMemoryImageUrl(assignment.memory);
                 const loadedImageMeta = loadedImages[imageUrl];
                 const publicName = getPublicMemoryDisplayName(assignment.memory);
@@ -452,27 +711,49 @@ export function HomeMemoryOrbit({
                 return (
                   <div
                     key={`active-${assignment.slot.id}-${assignment.memory.id}`}
-                    className={`absolute transition-[opacity,transform,filter] duration-[820ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                    className={`absolute transform-gpu transition-[opacity,filter] duration-[820ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
                       isAnimating ? "pointer-events-none" : ""
                     }`}
                     style={{
                       left: `${assignment.slot.left}%`,
                       top: `${assignment.slot.top}%`,
                       transform: `translate(-50%, -50%) rotate(${assignment.slot.rotation}deg)`,
-                      zIndex: isHovered ? 120 : assignment.slot.zIndex,
+                      zIndex: assignment.slot.zIndex,
                     }}
                   >
                     <button
                       type="button"
                       onClick={() => setSelectedMemory(assignment.memory)}
-                      onMouseEnter={() => setHoveredAssignmentKey(assignmentKey)}
-                      onMouseLeave={() => {
-                        setHoveredAssignmentKey((current) =>
-                          current === assignmentKey ? null : current,
-                        );
+                      onMouseEnter={(event) => {
+                        const parent = event.currentTarget.parentElement;
+
+                        if (parent) {
+                          parent.style.zIndex = "120";
+                        }
+                      }}
+                      onMouseLeave={(event) => {
+                        const parent = event.currentTarget.parentElement;
+
+                        if (parent) {
+                          parent.style.zIndex = String(assignment.slot.zIndex);
+                        }
+                      }}
+                      onFocus={(event) => {
+                        const parent = event.currentTarget.parentElement;
+
+                        if (parent) {
+                          parent.style.zIndex = "120";
+                        }
+                      }}
+                      onBlur={(event) => {
+                        const parent = event.currentTarget.parentElement;
+
+                        if (parent) {
+                          parent.style.zIndex = String(assignment.slot.zIndex);
+                        }
                       }}
                       aria-label={`${publicName} 상세 보기`}
-                      className={`group block overflow-hidden bg-transparent p-0 text-left shadow-[0_26px_60px_rgba(0,0,0,0.22)] transition-[opacity,transform,filter,box-shadow] duration-[820ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform hover:-translate-y-1 hover:scale-[1.02] hover:shadow-[0_34px_72px_rgba(0,0,0,0.28)] ${getActiveLayerClasses(isAnimating, showIncoming)}`}
+                      className={`group block transform-gpu overflow-hidden bg-transparent p-0 text-left shadow-[0_22px_48px_rgba(0,0,0,0.2)] transition-[opacity,transform,filter,box-shadow] duration-[780ms] ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform hover:-translate-y-[10px] hover:scale-[1.04] hover:shadow-[0_38px_82px_rgba(0,0,0,0.28)] ${getActiveLayerClasses(isAnimating, showIncoming)}`}
                       style={{
                         width: assignment.slot.width,
                       }}
@@ -486,6 +767,10 @@ export function HomeMemoryOrbit({
                           className={`absolute inset-0 bg-white/[0.08] transition-opacity duration-500 ${
                             isImageReady ? "opacity-0" : "animate-pulse opacity-100"
                           }`}
+                        />
+                        <div
+                          aria-hidden="true"
+                          className="pointer-events-none absolute inset-0 z-10 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.16),rgba(255,255,255,0)_62%)] opacity-0 transition-opacity duration-[820ms] ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:opacity-100"
                         />
                         <img
                           src={imageUrl}
@@ -502,7 +787,7 @@ export function HomeMemoryOrbit({
                               event.currentTarget.naturalHeight,
                             )
                           }
-                          className={`relative z-10 block w-full transition-[opacity,transform] duration-700 group-hover:scale-[1.03] ${
+                          className={`relative z-10 block w-full transform-gpu transition-[opacity,transform,filter] duration-[840ms] ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform group-hover:scale-[1.07] group-hover:brightness-[1.05] group-hover:saturate-[1.04] ${
                             isImageReady ? "opacity-100" : "opacity-0"
                           } ${
                             hasKnownDimensions
@@ -602,47 +887,7 @@ export function HomeMemoryOrbit({
             : null}
 
           <div className="pointer-events-none absolute left-1/2 top-1/2 z-[40] w-[min(78vw,760px)] -translate-x-1/2 -translate-y-1/2">
-            <div className="mx-auto max-w-[720px] rounded-[30px] bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.12),rgba(255,255,255,0.02)_58%,rgba(255,255,255,0))] px-4 py-6 text-center shadow-[0_28px_90px_rgba(0,0,0,0.22)] backdrop-blur-[2px] sm:px-8 sm:py-8">
-              <p className="text-[clamp(1.55rem,4.8vw,3.9rem)] font-black tracking-[-0.07em] text-white/92 drop-shadow-[0_10px_24px_rgba(6,10,30,0.34)]">
-                제 16기
-              </p>
-              <h1 className="mt-2 text-[clamp(2.4rem,9.6vw,7.2rem)] font-black leading-[0.95] tracking-[-0.09em] text-white drop-shadow-[0_16px_42px_rgba(6,10,30,0.46)]">
-                한몽 청년수련회
-              </h1>
-
-              <div className="pointer-events-auto mt-5 flex flex-col items-center gap-3 sm:mt-6">
-                <button
-                  type="button"
-                  onClick={() => {
-                    void handleShuffle();
-                  }}
-                  disabled={
-                    isLoading ||
-                    isAnimating ||
-                    isPreparingShuffle ||
-                    featuredMemories.length < 2
-                  }
-                  className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-white/24 bg-white/12 px-5 text-sm font-black text-white shadow-[0_16px_36px_rgba(0,0,0,0.18)] backdrop-blur-md transition hover:bg-white/18 disabled:cursor-not-allowed disabled:opacity-55 sm:h-13 sm:px-6 sm:text-base"
-                >
-                  <RiShuffleLine
-                    className={isAnimating || isPreparingShuffle ? "animate-spin" : ""}
-                  />
-                  <span>
-                    {isPreparingShuffle
-                      ? "이미지 준비 중..."
-                      : isAnimating
-                        ? "전시 교체 중..."
-                        : "셔플"}
-                  </span>
-                </button>
-
-                {!isLoading && !hasMemories ? (
-                  <p className="text-sm font-bold text-white/72 sm:text-base">
-                    {emptyMessage}
-                  </p>
-                ) : null}
-              </div>
-            </div>
+            {titlePanel}
           </div>
         </div>
       </section>

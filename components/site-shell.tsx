@@ -22,7 +22,9 @@ export function SiteShell({
   return (
     <main
       className={`relative min-h-screen overflow-hidden ${
-        fullBleed ? "" : "px-3 py-3 sm:px-6 sm:py-6"
+        fullBleed
+          ? ""
+          : "px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-6"
       } ${mainClassName}`}
     >
       {showBackdrop ? <EventSceneBackdrop /> : null}

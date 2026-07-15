@@ -15,7 +15,7 @@ import type { MemoryRecord } from "@/types/memory";
 
 function HomeScene({ children }: { children: React.ReactNode }) {
   return (
-    <section className="relative min-h-[100svh] overflow-hidden px-3 py-3 sm:px-6 sm:py-6">
+    <section className="relative min-h-[100svh] overflow-hidden px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-6">
       <div className="pointer-events-none absolute inset-0 z-0 bg-[#02030a]">
         <Galaxy
           className="absolute inset-0"
