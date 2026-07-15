@@ -12,6 +12,7 @@ type MainMemorySpotlightProps = {
   emptyMessage: string;
   memories: MemoryRecord[];
   syncMainFeatureVisibility?: boolean;
+  allowMainFeatureToggle?: boolean;
 };
 
 function getCardLayoutClassName(index: number) {
@@ -64,6 +65,7 @@ export function MainMemorySpotlight({
   emptyMessage,
   memories,
   syncMainFeatureVisibility = false,
+  allowMainFeatureToggle = true,
 }: MainMemorySpotlightProps) {
   const [selectedMemory, setSelectedMemory] = useState<MemoryRecord | null>(
     null,
@@ -102,14 +104,17 @@ export function MainMemorySpotlight({
   return (
     <>
       <div className="relative mx-auto w-full max-w-[1680px]">
-        <div className="pointer-events-none absolute inset-x-4 top-0 h-20 rounded-full bg-white/28 blur-3xl sm:inset-x-10 sm:h-24" />
         <div className="grid grid-cols-2 items-start gap-x-3 gap-y-5 sm:gap-x-6 sm:gap-y-8 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
           {visibleMemories.map((memory, index) => {
             const publicName = getPublicMemoryDisplayName(memory);
-            const ratio =
-              memory.imageWidth && memory.imageHeight
-                ? `${memory.imageWidth} / ${memory.imageHeight}`
-                : "4 / 5";
+            const hasKnownDimensions =
+              typeof memory.imageWidth === "number" &&
+              typeof memory.imageHeight === "number" &&
+              memory.imageWidth > 0 &&
+              memory.imageHeight > 0;
+            const ratio = hasKnownDimensions
+              ? `${memory.imageWidth} / ${memory.imageHeight}`
+              : undefined;
 
             return (
               <div
@@ -123,7 +128,7 @@ export function MainMemorySpotlight({
                 >
                   <div
                     className="overflow-hidden bg-transparent"
-                    style={{ aspectRatio: ratio }}
+                    style={ratio ? { aspectRatio: ratio } : undefined}
                   >
                     <img
                       src={memory.thumbnailUrl ?? memory.imageUrl}
@@ -132,7 +137,11 @@ export function MainMemorySpotlight({
                       height={memory.imageHeight}
                       loading={index < 5 ? "eager" : "lazy"}
                       decoding="async"
-                      className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.025]"
+                      className={`block w-full transition duration-500 group-hover:scale-[1.025] ${
+                        hasKnownDimensions
+                          ? "h-full object-cover"
+                          : "h-auto object-contain"
+                      }`}
                     />
                   </div>
                 </button>
@@ -154,6 +163,7 @@ export function MainMemorySpotlight({
         key={selectedMemory?.id ?? "memory-detail-empty"}
         memory={selectedMemory}
         onClose={() => setSelectedMemory(null)}
+        allowMainFeatureToggle={allowMainFeatureToggle}
         onUpdated={(updatedMemory) => {
           setSelectedMemory(updatedMemory);
           setMemoryOverrides((current) => ({

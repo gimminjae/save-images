@@ -23,6 +23,7 @@ export type MemoryRecord = {
   authorId?: string;
   isDeleted?: boolean;
   sortOrder?: number | null;
+  downloadUrl?: string;
 };
 
 export type CreateMemoryInput = {

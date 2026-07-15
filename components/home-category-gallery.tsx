@@ -1,40 +1,23 @@
 "use client";
 
 import { useMemo } from "react";
-import { MainMemorySpotlight } from "@/components/main-memory-spotlight";
+import { HomeMemoryOrbit } from "@/components/home-memory-orbit";
 import type { MemoryRecord } from "@/types/memory";
 
 type HomeCategoryGalleryProps = {
   mainFeatured: MemoryRecord[];
 };
 
-function shuffleMemories(memories: MemoryRecord[], limit?: number) {
-  const shuffled = [...memories];
-
-  for (let index = shuffled.length - 1; index > 0; index -= 1) {
-    const randomIndex = Math.floor(Math.random() * (index + 1));
-    const current = shuffled[index];
-
-    shuffled[index] = shuffled[randomIndex];
-    shuffled[randomIndex] = current;
-  }
-
-  if (typeof limit === "number") {
-    return shuffled.slice(0, limit);
-  }
-
-  return shuffled;
-}
-
 export function HomeCategoryGallery({
   mainFeatured,
 }: HomeCategoryGalleryProps) {
   const displayMemories = useMemo(
-    () =>
-      shuffleMemories(
-        mainFeatured.filter((memory) => memory.isMainFeatured === true),
-      ),
+    () => mainFeatured.filter((memory) => memory.isMainFeatured === true),
     [mainFeatured],
+  );
+  const orbitKey = useMemo(
+    () => displayMemories.map((memory) => memory.id).join("|"),
+    [displayMemories],
   );
 
   return (
@@ -95,11 +78,11 @@ export function HomeCategoryGallery({
       </div>
       */}
 
-      <div className="w-full pb-6 sm:pb-8">
-        <MainMemorySpotlight
+      <div className="w-full">
+        <HomeMemoryOrbit
+          key={orbitKey}
           memories={displayMemories}
-          emptyMessage="메인 설정된 이미지가 없습니다."
-          syncMainFeatureVisibility
+          emptyMessage="메인 전시 이미지가 없습니다."
         />
       </div>
     </>

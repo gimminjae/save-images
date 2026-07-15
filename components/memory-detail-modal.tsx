@@ -12,6 +12,7 @@ type MemoryDetailModalProps = {
   memory: MemoryRecord | null;
   onClose: () => void;
   onUpdated?: (memory: MemoryRecord) => void;
+  allowMainFeatureToggle?: boolean;
 };
 
 const formatter = new Intl.DateTimeFormat("ko-KR", {
@@ -24,6 +25,7 @@ export function MemoryDetailModal({
   memory,
   onClose,
   onUpdated,
+  allowMainFeatureToggle = true,
 }: MemoryDetailModalProps) {
   const [activeMemory, setActiveMemory] = useState<MemoryRecord | null>(memory);
   const [managePassword, setManagePassword] = useState("");
@@ -185,80 +187,89 @@ export function MemoryDetailModal({
 
               <div className="flex flex-wrap items-center gap-2">
                 <a
-                  href={`/api/memories/download/${activeMemory.id}`}
+                  href={
+                    activeMemory.downloadUrl ??
+                    `/api/memories/download/${activeMemory.id}`
+                  }
                   className="inline-flex h-10 shrink-0 items-center justify-center rounded-full border border-white/90 bg-white/92 px-4 text-sm font-black whitespace-nowrap text-slate-950 shadow-[0_12px_28px_rgba(0,0,0,0.2)] transition hover:bg-white"
                 >
                   이미지 다운로드
                 </a>
-                <button
-                  type="button"
-                  onClick={() =>
-                    void updateMainFeature(!activeMemory.isMainFeatured)
-                  }
-                  disabled={isUpdatingMainFeature}
-                  className={`inline-flex h-10 shrink-0 items-center justify-center rounded-full border px-4 text-sm font-black text-white shadow-[0_12px_28px_rgba(0,0,0,0.2)] transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                    activeMemory.isMainFeatured
-                      ? "border-rose-300/40 bg-rose-500/28 hover:bg-rose-500/36"
-                      : "border-emerald-300/35 bg-emerald-500/24 hover:bg-emerald-500/32"
-                  }`}
-                >
-                  {isUpdatingMainFeature
-                    ? "변경 중..."
-                    : activeMemory.isMainFeatured
-                      ? "홈화면 게시 해제"
-                      : "홈화면 게시"}
-                </button>
+                {allowMainFeatureToggle ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void updateMainFeature(!activeMemory.isMainFeatured)
+                    }
+                    disabled={isUpdatingMainFeature}
+                    className={`inline-flex h-10 shrink-0 items-center justify-center rounded-full border px-4 text-sm font-black text-white shadow-[0_12px_28px_rgba(0,0,0,0.2)] transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                      activeMemory.isMainFeatured
+                        ? "border-rose-300/40 bg-rose-500/28 hover:bg-rose-500/36"
+                        : "border-emerald-300/35 bg-emerald-500/24 hover:bg-emerald-500/32"
+                    }`}
+                  >
+                    {isUpdatingMainFeature
+                      ? "변경 중..."
+                      : activeMemory.isMainFeatured
+                        ? "홈화면 게시 해제"
+                        : "홈화면 게시"}
+                  </button>
+                ) : null}
               </div>
             </div>
 
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span
-                className={`rounded-full px-3 py-1 text-[0.72rem] font-black tracking-[0.08em] ${
-                  activeMemory.isMainFeatured
-                    ? "bg-fuchsia-200/25 text-fuchsia-50"
-                    : "bg-white/10 text-white/70"
-                }`}
-              >
-                {activeMemory.isMainFeatured
-                  ? "홈화면 게시 중"
-                  : "홈화면 미게시"}
-              </span>
-              {manageMessage ? (
-                <span className="rounded-full bg-emerald-300/18 px-3 py-1 text-[0.72rem] font-black text-emerald-50">
-                  {manageMessage}
-                </span>
-              ) : null}
-            </div>
+            {allowMainFeatureToggle ? (
+              <>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <span
+                    className={`rounded-full px-3 py-1 text-[0.72rem] font-black tracking-[0.08em] ${
+                      activeMemory.isMainFeatured
+                        ? "bg-fuchsia-200/25 text-fuchsia-50"
+                        : "bg-white/10 text-white/70"
+                    }`}
+                  >
+                    {activeMemory.isMainFeatured
+                      ? "홈화면 게시 중"
+                      : "홈화면 미게시"}
+                  </span>
+                  {manageMessage ? (
+                    <span className="rounded-full bg-emerald-300/18 px-3 py-1 text-[0.72rem] font-black text-emerald-50">
+                      {manageMessage}
+                    </span>
+                  ) : null}
+                </div>
 
-            {showManageAuth ? (
-              <form
-                className="mt-3 flex flex-col gap-2 sm:flex-row"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void updateMainFeature(!activeMemory.isMainFeatured);
-                }}
-              >
-                <input
-                  type="password"
-                  value={managePassword}
-                  onChange={(event) => setManagePassword(event.target.value)}
-                  placeholder="관리자 비밀번호"
-                  className="h-11 min-w-0 flex-1 rounded-full border border-white/14 bg-black/28 px-4 text-sm text-white outline-none placeholder:text-white/45"
-                />
-                <button
-                  type="submit"
-                  disabled={isUpdatingMainFeature || !managePassword.trim()}
-                  className="inline-flex h-11 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/12 px-4 text-sm font-black text-white transition disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  인증 후 변경
-                </button>
-              </form>
-            ) : null}
+                {showManageAuth ? (
+                  <form
+                    className="mt-3 flex flex-col gap-2 sm:flex-row"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void updateMainFeature(!activeMemory.isMainFeatured);
+                    }}
+                  >
+                    <input
+                      type="password"
+                      value={managePassword}
+                      onChange={(event) => setManagePassword(event.target.value)}
+                      placeholder="관리자 비밀번호"
+                      className="h-11 min-w-0 flex-1 rounded-full border border-white/14 bg-black/28 px-4 text-sm text-white outline-none placeholder:text-white/45"
+                    />
+                    <button
+                      type="submit"
+                      disabled={isUpdatingMainFeature || !managePassword.trim()}
+                      className="inline-flex h-11 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/12 px-4 text-sm font-black text-white transition disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      인증 후 변경
+                    </button>
+                  </form>
+                ) : null}
 
-            {manageError ? (
-              <div className="mt-3 rounded-[18px] border border-rose-300/24 bg-rose-500/14 px-4 py-3 text-sm text-rose-50">
-                {manageError}
-              </div>
+                {manageError ? (
+                  <div className="mt-3 rounded-[18px] border border-rose-300/24 bg-rose-500/14 px-4 py-3 text-sm text-rose-50">
+                    {manageError}
+                  </div>
+                ) : null}
+              </>
             ) : null}
 
             {activeMemory.description ? (

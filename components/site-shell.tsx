@@ -1,5 +1,4 @@
 import { EventSceneBackdrop } from "@/components/event-scene-backdrop";
-import { FloatingUploadButton } from "@/components/floating-upload-button";
 
 type SiteShellProps = {
   children: React.ReactNode;
@@ -12,12 +11,14 @@ type SiteShellProps = {
 
 export function SiteShell({
   children,
-  currentPath,
+  currentPath: _currentPath,
   showBackdrop = true,
   fullBleed = false,
   mainClassName = "",
   contentClassName = "",
 }: SiteShellProps) {
+  void _currentPath;
+
   return (
     <main
       className={`relative min-h-screen overflow-hidden ${
@@ -32,7 +33,6 @@ export function SiteShell({
       >
         {children}
       </div>
-      <FloatingUploadButton currentPath={currentPath} />
     </main>
   );
 }

@@ -21,6 +21,7 @@ type CachedApiResponse = {
 };
 
 const CATEGORY_TREE_CACHE_TTL_MS = 60 * 1000;
+const MAIN_GALLERY_CACHE_TTL_MS = 60 * 1000;
 const PUBLISHED_MEMORIES_CACHE_TTL_MS = 15 * 1000;
 const apiResponseCache = new Map<string, CachedApiResponse>();
 
@@ -162,6 +163,27 @@ export async function fetchPublishedMemories(
   });
 
   storeCachedValue(cacheKey, payload, PUBLISHED_MEMORIES_CACHE_TTL_MS);
+
+  return Array.isArray(payload.memories) ? payload.memories : [];
+}
+
+export async function fetchMainGalleryMemories(signal?: AbortSignal) {
+  const cacheKey = "main-gallery:memories";
+  const cached = readCachedValue<PublishedMemoriesResponse>(cacheKey);
+
+  if (cached) {
+    return Array.isArray(cached.memories) ? cached.memories : [];
+  }
+
+  const payload = await readJson<PublishedMemoriesResponse>(
+    "/api/main-gallery",
+    {
+      cache: "no-store",
+      signal,
+    },
+  );
+
+  storeCachedValue(cacheKey, payload, MAIN_GALLERY_CACHE_TTL_MS);
 
   return Array.isArray(payload.memories) ? payload.memories : [];
 }

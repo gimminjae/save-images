@@ -47,6 +47,8 @@ export function normalizeMemoryRecord(
     authorId: typeof record.authorId === "string" ? record.authorId : undefined,
     isDeleted: record.isDeleted === true,
     sortOrder: typeof record.sortOrder === "number" ? record.sortOrder : null,
+    downloadUrl:
+      typeof record.downloadUrl === "string" ? record.downloadUrl : undefined,
   };
 }
 

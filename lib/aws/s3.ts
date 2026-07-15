@@ -4,6 +4,7 @@ import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import path from "node:path";
 import {
   DeleteObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -21,6 +22,14 @@ type UploadTokenPayload = {
   fileKey: string;
   fileSize: number;
 };
+type PublicImageObject = {
+  key: string;
+  lastModified: number;
+  name: string;
+  url: string;
+};
+
+const IMAGE_KEY_PATTERN = /\.(avif|gif|jpe?g|png|webp)$/i;
 
 function getS3Client() {
   if (s3Client) {
@@ -201,4 +210,48 @@ export async function deleteMemoryObject(fileKey: string) {
   });
 
   await getS3Client().send(command);
+}
+
+function isImageObjectKey(key: string) {
+  return IMAGE_KEY_PATTERN.test(key);
+}
+
+function createDisplayNameFromKey(key: string) {
+  const fileName = path.basename(key, path.extname(key));
+
+  return fileName.trim().length > 0 ? fileName : "main-image";
+}
+
+export async function listPublicImageObjectsByPrefix(prefix: string) {
+  const env = getStorageEnv();
+  const images: PublicImageObject[] = [];
+  let continuationToken: string | undefined;
+
+  do {
+    const command = new ListObjectsV2Command({
+      Bucket: env.awsS3BucketName,
+      ContinuationToken: continuationToken,
+      Prefix: prefix,
+    });
+    const response = await getS3Client().send(command);
+
+    (response.Contents ?? []).forEach((item) => {
+      if (!item.Key || item.Key.endsWith("/") || !isImageObjectKey(item.Key)) {
+        return;
+      }
+
+      images.push({
+        key: item.Key,
+        lastModified: item.LastModified?.getTime() ?? Date.now(),
+        name: createDisplayNameFromKey(item.Key),
+        url: getPublicAssetUrl(item.Key),
+      });
+    });
+
+    continuationToken = response.IsTruncated
+      ? response.NextContinuationToken
+      : undefined;
+  } while (continuationToken);
+
+  return images;
 }
