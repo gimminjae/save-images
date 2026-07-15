@@ -336,11 +336,6 @@ export default function GalleryPage() {
         <ConfigurationNotice missingKeys={missingEnvVars} />
       ) : (
         <section className="px-5 py-6 sm:px-6 sm:py-7">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <span className="rounded-full bg-white/85 px-4 py-2 text-sm font-black text-sky-950">
-              총 {memories.length}장
-            </span>
-          </div>
 
           <div className="mt-5 space-y-3">
             <div className="rounded-[24px] border border-white/60 bg-white/62 px-4 py-4 shadow-[0_14px_28px_rgba(21,84,144,0.08)] backdrop-blur-md">
@@ -502,16 +497,16 @@ export default function GalleryPage() {
                 {sections.map((section) => (
                   <section
                     key={`${section.id}:${selectedCategoryId ?? "all"}:${viewMode}`}
-                    className="rounded-[28px] border border-sky-200/70 bg-white/58 p-4 shadow-[0_16px_34px_rgba(33,110,178,0.1)] backdrop-blur-md sm:p-5"
+                    className="p-4 shadow-[0_16px_34px_rgba(33,110,178,0.1)] sm:p-5"
                     style={{
                       containIntrinsicSize: "1000px",
                       contentVisibility: "auto",
                     }}
                   >
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <h2 className="text-2xl font-black tracking-[-0.05em] break-words text-slate-950 sm:text-3xl">
+                      {/* <h2 className="text-2xl font-black tracking-[-0.05em] break-words text-slate-950 sm:text-3xl">
                         {section.name}
-                      </h2>
+                      </h2> */}
                       <span className="rounded-full bg-white/90 px-4 py-2 text-sm font-black text-sky-950">
                         {section.memories.length}장
                       </span>
