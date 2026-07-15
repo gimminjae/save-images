@@ -46,6 +46,37 @@ function getCategoryLabel(
   return `${"· ".repeat(Math.min(relativeDepth, 4))}${category.name}`;
 }
 
+const CATEGORY_MEMORIES_PAGE_SIZE = 300;
+const UNFILTERED_MEMORIES_LIMIT = 500;
+
+async function fetchAllCategoryMemories(
+  categoryId: string,
+  signal: AbortSignal,
+) {
+  const memories: MemoryRecord[] = [];
+  let offset = 0;
+
+  while (!signal.aborted) {
+    const batch = await fetchPublishedMemories({
+      limit: CATEGORY_MEMORIES_PAGE_SIZE,
+      offset,
+      categoryId,
+      includeDescendants: true,
+      signal,
+    });
+
+    memories.push(...batch);
+
+    if (batch.length < CATEGORY_MEMORIES_PAGE_SIZE) {
+      break;
+    }
+
+    offset += batch.length;
+  }
+
+  return memories;
+}
+
 export default function GalleryPage() {
   const missingEnvVars = useMemo(() => getMissingSupabasePublicEnv(), []);
   const [categories, setCategories] = useState<CategoryRecord[]>([]);
@@ -204,12 +235,14 @@ export default function GalleryPage() {
 
     const controller = new AbortController();
 
-    void fetchPublishedMemories({
-      limit: 500,
-      categoryId: selectedCategoryId ?? undefined,
-      includeDescendants: selectedCategoryId ? true : undefined,
-      signal: controller.signal,
-    })
+    const loadMemories = selectedCategoryId
+      ? fetchAllCategoryMemories(selectedCategoryId, controller.signal)
+      : fetchPublishedMemories({
+          limit: UNFILTERED_MEMORIES_LIMIT,
+          signal: controller.signal,
+        });
+
+    void loadMemories
       .then((loadedMemories) => {
         startTransition(() => {
           setMemories(loadedMemories);

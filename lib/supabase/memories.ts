@@ -12,6 +12,7 @@ type MemoryRow = Record<string, unknown>;
 type CategoryRow = Record<string, unknown>;
 type ListAllMemoriesOptions = {
   limit?: number;
+  offset?: number;
   searchQuery?: string;
   categoryIds?: string[];
   onlyVisible?: boolean;
@@ -152,6 +153,7 @@ function createPublicMemoryListCacheKey(options?: ListAllMemoriesOptions) {
     categoryIds: [...(options?.categoryIds ?? [])].sort(),
     includeCategory: options?.includeCategory !== false,
     limit: options?.limit ?? null,
+    offset: options?.offset ?? 0,
     lightweight: options?.lightweight === true,
     onlyCategoryFeatured: options?.onlyCategoryFeatured === true,
     onlyMainFeatured: options?.onlyMainFeatured === true,
@@ -249,7 +251,8 @@ export async function listAllMemories(options?: ListAllMemoriesOptions) {
   }
 
   if (typeof options?.limit === "number") {
-    query = query.limit(options.limit);
+    const offset = Math.max(options.offset ?? 0, 0);
+    query = query.range(offset, offset + options.limit - 1);
   }
 
   const { data, error } = await query;

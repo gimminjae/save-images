@@ -133,6 +133,7 @@ export async function fetchCategoryTree(signal?: AbortSignal) {
 export async function fetchPublishedMemories(
   options?: {
     limit?: number;
+    offset?: number;
     mainFeatured?: boolean;
     categoryFeatured?: boolean;
     categoryId?: string;
@@ -142,6 +143,7 @@ export async function fetchPublishedMemories(
 ) {
   const path = buildPath("/api/memories", {
     limit: options?.limit,
+    offset: options?.offset,
     mainFeatured: options?.mainFeatured,
     categoryFeatured: options?.categoryFeatured,
     categoryId: options?.categoryId,

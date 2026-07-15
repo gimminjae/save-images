@@ -69,6 +69,11 @@ export async function GET(request: Request) {
       Number.isFinite(limitValue) && limitValue > 0
         ? Math.min(limitValue, 1000)
         : 500;
+    const offsetValue = Number(url.searchParams.get("offset") ?? "0");
+    const offset =
+      Number.isFinite(offsetValue) && offsetValue >= 0
+        ? Math.floor(offsetValue)
+        : 0;
     const mainFeatured = url.searchParams.get("mainFeatured") === "true";
     const categoryFeatured =
       url.searchParams.get("categoryFeatured") === "true";
@@ -85,6 +90,7 @@ export async function GET(request: Request) {
       mainFeatured || categoryFeatured
         ? await listAllMemories({
             limit,
+            offset,
             onlyVisible: true,
             onlyMainFeatured: mainFeatured,
             onlyCategoryFeatured: categoryFeatured,
@@ -94,6 +100,7 @@ export async function GET(request: Request) {
           })
         : await listAllMemories({
             limit,
+            offset,
             onlyVisible: true,
             categoryIds,
             includeCategory: false,
