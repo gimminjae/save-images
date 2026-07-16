@@ -120,11 +120,14 @@ export function MemoryDetailModal({
     setIsDownloading(true);
     setDownloadError(null);
 
-    const isLocalPublicImage =
+    const isStaticGalleryImage =
       activeMemory.id.startsWith("public-main:") ||
+      activeMemory.id.startsWith("main-gallery:") ||
       activeMemory.imageUrl.startsWith("/images/") ||
-      activeMemory.downloadUrl?.startsWith("/images/") === true;
-    const downloadUrl = isLocalPublicImage
+      activeMemory.downloadUrl?.startsWith("/images/") === true ||
+      activeMemory.downloadUrl?.startsWith("/api/main-gallery/download/") ===
+        true;
+    const downloadUrl = isStaticGalleryImage
       ? (activeMemory.downloadUrl ?? activeMemory.imageUrl)
       : `/api/memories/download/${activeMemory.id}`;
 

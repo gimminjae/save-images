@@ -31,15 +31,6 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        source: "/main-gallery-manifest.json",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "public, max-age=600, stale-while-revalidate=3600",
-          },
-        ],
-      },
-      {
         source: "/images/:path*",
         headers: [
           {

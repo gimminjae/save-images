@@ -39,6 +39,7 @@ type PreloadAssignmentsOptions = {
 
 const MAX_VISIBLE_MEMORIES = 15;
 const MOBILE_VISIBLE_MEMORIES = 15;
+const ORBIT_VIEWPORT_MEDIA_QUERY = "(min-width: 1024px)";
 const SHUFFLE_DURATION_MS = 820;
 const SLOT_SELECTION_ORDER = [0, 5, 10, 14, 6, 7, 12, 1, 4, 8, 9, 2, 3, 11, 13];
 
@@ -282,6 +283,9 @@ export function HomeMemoryOrbit({
     useState<SlotAssignment[] | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
   const [showIncoming, setShowIncoming] = useState(false);
+  const [viewportMode, setViewportMode] = useState<"desktop" | "mobile" | null>(
+    null,
+  );
   const isMountedRef = useRef(true);
   const frameRef = useRef<number | null>(null);
   const preloadPromisesRef = useRef<Map<string, Promise<void>>>(new Map());
@@ -463,14 +467,32 @@ export function HomeMemoryOrbit({
   }, [clearScheduledShuffle]);
 
   useEffect(() => {
-    if (isLoading || activeAssignments.length === 0) {
+    if (typeof window === "undefined") {
       return;
     }
 
-    activeAssignments.forEach((assignment) => {
-      void preloadImage(getMemoryImageUrl(assignment.memory));
-    });
-  }, [activeAssignments, isLoading, preloadImage]);
+    const mediaQuery = window.matchMedia(ORBIT_VIEWPORT_MEDIA_QUERY);
+
+    const handleChange = () => {
+      setViewportMode(mediaQuery.matches ? "desktop" : "mobile");
+    };
+
+    handleChange();
+
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", handleChange);
+
+      return () => {
+        mediaQuery.removeEventListener("change", handleChange);
+      };
+    }
+
+    mediaQuery.addListener(handleChange);
+
+    return () => {
+      mediaQuery.removeListener(handleChange);
+    };
+  }, []);
 
   useEffect(() => {
     if (
@@ -485,26 +507,21 @@ export function HomeMemoryOrbit({
     let cancelled = false;
     const timer = window.setTimeout(() => {
       void (async () => {
-        let nextAssignmentsCursor = activeAssignments;
-        let nextVersionCursor = shuffleVersion;
-
-        for (let index = 0; index < 2; index += 1) {
-          if (cancelled) {
-            return;
-          }
-
-          nextVersionCursor += 1;
-          nextAssignmentsCursor = getNextAssignments(
-            featuredMemories,
-            nextAssignmentsCursor,
-            baseSeed,
-            nextVersionCursor,
-          );
-
-          await preloadAssignments(nextAssignmentsCursor, { batchSize: 2 });
+        if (cancelled) {
+          return;
         }
+
+        const nextAssignments = getNextAssignments(
+          featuredMemories,
+          activeAssignments,
+          baseSeed,
+          shuffleVersion + 1,
+        );
+
+        await waitForBrowserBreath();
+        await preloadAssignments(nextAssignments, { batchSize: 1 });
       })();
-    }, 120);
+    }, 1400);
 
     return () => {
       cancelled = true;
@@ -688,9 +705,9 @@ export function HomeMemoryOrbit({
                   alt={publicName}
                   width={imageWidth}
                   height={imageHeight}
-                  loading={index < 4 ? "eager" : "lazy"}
+                  loading={index < 2 ? "eager" : "lazy"}
                   decoding="async"
-                  fetchPriority={index < 4 ? "high" : "auto"}
+                  fetchPriority={index < 2 ? "high" : "auto"}
                   onLoad={(event) =>
                     registerLoadedImage(
                       imageUrl,
@@ -728,9 +745,9 @@ export function HomeMemoryOrbit({
                   alt={publicName}
                   width={imageWidth}
                   height={imageHeight}
-                  loading={index < 4 ? "eager" : "lazy"}
+                  loading="lazy"
                   decoding="async"
-                  fetchPriority={index < 4 ? "high" : "auto"}
+                  fetchPriority="auto"
                   onLoad={(event) =>
                     registerLoadedImage(
                       imageUrl,
@@ -756,7 +773,7 @@ export function HomeMemoryOrbit({
     <>
       <section className="relative flex min-h-[100svh] w-full items-start justify-center lg:items-center">
         <div className="relative mx-auto block h-[min(112svh,980px)] min-h-[820px] w-full max-w-[520px] px-2 pt-4 sm:px-4 sm:pt-6 lg:hidden">
-          {isLoading ? (
+          {isLoading || viewportMode !== "mobile" ? (
             mobilePlaceholderSlots.map((slot, index) => (
               <div
                 key={`mobile-placeholder-${slot.id}`}
@@ -817,7 +834,7 @@ export function HomeMemoryOrbit({
               ))
             : null}
 
-          {!isLoading
+          {!isLoading && viewportMode === "desktop"
             ? orbitAssignments.map((assignment, index) => {
                 const imageUrl = getMemoryImageUrl(assignment.memory);
                 const loadedImageMeta = loadedImages[imageUrl];
@@ -913,9 +930,9 @@ export function HomeMemoryOrbit({
                           alt={publicName}
                           width={imageWidth}
                           height={imageHeight}
-                          loading="eager"
+                          loading={index < 4 ? "eager" : "lazy"}
                           decoding="async"
-                          fetchPriority={index < 8 ? "high" : "auto"}
+                          fetchPriority={index < 4 ? "high" : "auto"}
                           onLoad={(event) =>
                             registerLoadedImage(
                               imageUrl,
@@ -938,7 +955,7 @@ export function HomeMemoryOrbit({
               })
             : null}
 
-          {!isLoading && incomingAssignments
+          {!isLoading && viewportMode === "desktop" && incomingAssignments
             ? incomingAssignments.map((assignment, index) => {
                 const imageUrl = getMemoryImageUrl(assignment.memory);
                 const loadedImageMeta = loadedImages[imageUrl];
@@ -997,9 +1014,9 @@ export function HomeMemoryOrbit({
                           alt={publicName}
                           width={imageWidth}
                           height={imageHeight}
-                          loading="eager"
+                          loading="lazy"
                           decoding="async"
-                          fetchPriority={index < 8 ? "high" : "auto"}
+                          fetchPriority="auto"
                           onLoad={(event) =>
                             registerLoadedImage(
                               imageUrl,

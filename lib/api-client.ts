@@ -1,3 +1,4 @@
+import mainGalleryImageNames from "@/data/main-gallery-images.json";
 import type { CategoryRecord } from "@/types/category";
 import type { MemoryRecord } from "@/types/memory";
 
@@ -8,15 +9,6 @@ type ApiErrorPayload = {
 type PublishedMemoriesResponse = {
   memories?: MemoryRecord[];
   error?: string;
-};
-
-type MainGalleryManifestResponse = {
-  generatedAt?: string;
-  images?: Array<{
-    lastModified: number;
-    name: string;
-    url: string;
-  }>;
 };
 
 type CategoriesResponse = {
@@ -33,6 +25,38 @@ const CATEGORY_TREE_CACHE_TTL_MS = 60 * 1000;
 const MAIN_GALLERY_CACHE_TTL_MS = 60 * 1000;
 const PUBLISHED_MEMORIES_CACHE_TTL_MS = 15 * 1000;
 const apiResponseCache = new Map<string, CachedApiResponse>();
+const MAIN_GALLERY_BASE_URL =
+  "https://guri-church-bucket.s3.ap-southeast-2.amazonaws.com/hanmong/hanmong16main/";
+const MAIN_GALLERY_REFERENCE_TIMESTAMP = Date.UTC(2026, 6, 16);
+const MAIN_GALLERY_SUPPORTED_EXTENSIONS = /\.(jpe?g|png|webp|avif)$/i;
+
+const MAIN_GALLERY_MEMORIES: MemoryRecord[] = mainGalleryImageNames
+  .filter((imageName) => MAIN_GALLERY_SUPPORTED_EXTENSIONS.test(imageName))
+  .map((imageName, index) => {
+    const displayName = imageName.replace(/\.[^.]+$/, "");
+    const imageUrl = new URL(imageName, MAIN_GALLERY_BASE_URL).toString();
+    const timestamp = MAIN_GALLERY_REFERENCE_TIMESTAMP + index;
+
+    return {
+      id: `main-gallery:${imageName}`,
+      name: displayName,
+      nickname: displayName,
+      department: "",
+      description: "",
+      imageUrl,
+      imageKey: `hanmong/hanmong16main/${imageName}`,
+      categoryId: null,
+      category: null,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      status: "published" as const,
+      isVisible: true,
+      isCategoryFeatured: false,
+      isMainFeatured: true,
+      thumbnailUrl: imageUrl,
+      downloadUrl: `/api/main-gallery/download/${encodeURIComponent(imageName)}`,
+    };
+  });
 
 function buildPath(
   pathname: string,
@@ -177,50 +201,26 @@ export async function fetchPublishedMemories(
 }
 
 export async function fetchMainGalleryMemories(signal?: AbortSignal) {
-  const mainGalleryPath = "/main-gallery-manifest.json?source=public-images-v4";
-  const cacheKey = "main-gallery:public-images:v4";
+  const cacheKey = "main-gallery:s3-json:v1";
   const cached = readCachedValue<MemoryRecord[]>(cacheKey);
 
   if (cached) {
     return cached;
   }
 
-  const payload = await readJson<MainGalleryManifestResponse>(
-    mainGalleryPath,
-    {
-      cache: "force-cache",
-      signal,
-    },
-  );
-  const memories = Array.isArray(payload.images)
-    ? payload.images.map((image) => {
-        const displayName = image.name.replace(/\.[^.]+$/, "");
+  if (signal?.aborted) {
+    const abortError = new Error("The operation was aborted.");
+    abortError.name = "AbortError";
+    throw abortError;
+  }
 
-        return {
-          id: `public-main:${image.name}`,
-          name: displayName,
-          nickname: displayName,
-          department: "",
-          description: "",
-          imageUrl: image.url,
-          imageKey: `public/images/${image.name}`,
-          categoryId: null,
-          category: null,
-          createdAt: image.lastModified,
-          updatedAt: image.lastModified,
-          status: "published" as const,
-          isVisible: true,
-          isCategoryFeatured: false,
-          isMainFeatured: true,
-          thumbnailUrl: image.url,
-          downloadUrl: image.url,
-        };
-      })
-    : [];
+  storeCachedValue(cacheKey, MAIN_GALLERY_MEMORIES, MAIN_GALLERY_CACHE_TTL_MS);
 
-  storeCachedValue(cacheKey, memories, MAIN_GALLERY_CACHE_TTL_MS);
+  return MAIN_GALLERY_MEMORIES;
+}
 
-  return memories;
+export function getMainGalleryMemories() {
+  return MAIN_GALLERY_MEMORIES;
 }
 
 export async function fetchAdminMemories(

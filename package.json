@@ -3,8 +3,6 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "predev": "node scripts/generate-main-gallery-manifest.mjs",
-    "prebuild": "node scripts/generate-main-gallery-manifest.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
