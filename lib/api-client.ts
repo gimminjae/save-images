@@ -168,7 +168,8 @@ export async function fetchPublishedMemories(
 }
 
 export async function fetchMainGalleryMemories(signal?: AbortSignal) {
-  const cacheKey = "main-gallery:memories";
+  const mainGalleryPath = "/api/main-gallery?source=public-images-v2";
+  const cacheKey = "main-gallery:public-images:v2";
   const cached = readCachedValue<PublishedMemoriesResponse>(cacheKey);
 
   if (cached) {
@@ -176,9 +177,9 @@ export async function fetchMainGalleryMemories(signal?: AbortSignal) {
   }
 
   const payload = await readJson<PublishedMemoriesResponse>(
-    "/api/main-gallery",
+    mainGalleryPath,
     {
-      cache: "force-cache",
+      cache: "no-store",
       signal,
     },
   );

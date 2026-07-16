@@ -1,29 +1,54 @@
+import path from "node:path";
+import { readdir, stat } from "node:fs/promises";
 import { NextResponse } from "next/server";
-import { getMissingStorageEnv } from "@/lib/env";
-import { listPublicImageObjectsByPrefix } from "@/lib/aws/s3";
 import type { MemoryRecord } from "@/types/memory";
 
 export const runtime = "nodejs";
 
-const MAIN_GALLERY_PREFIX = "hanmong/hanmong16main/";
+const PUBLIC_MAIN_GALLERY_DIRECTORY = path.join(
+  process.cwd(),
+  "public",
+  "images",
+);
 const MAIN_GALLERY_HEADERS = {
-  "Cache-Control": "public, max-age=60, stale-while-revalidate=300",
+  "Cache-Control": "no-store",
 };
+const SUPPORTED_IMAGE_EXTENSIONS = new Set([
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".webp",
+  ".gif",
+  ".avif",
+]);
 
-function mapS3ImageToMemoryRecord(image: {
-  key: string;
+let mainGalleryCache:
+  | {
+      expiresAt: number;
+      memories: MemoryRecord[];
+    }
+  | null = null;
+
+function isSupportedMainGalleryImage(fileName: string) {
+  return SUPPORTED_IMAGE_EXTENSIONS.has(path.extname(fileName).toLowerCase());
+}
+
+function mapPublicImageToMemoryRecord(image: {
   lastModified: number;
   name: string;
-  url: string;
 }): MemoryRecord {
+  const imageUrl = `/images/${encodeURIComponent(image.name)}`;
+  const imageKey = `public/images/${image.name}`;
+  const imageName = image.name.replace(/\.[^.]+$/, "");
+
   return {
-    id: `s3-main:${image.key}`,
-    name: image.name,
-    nickname: image.name,
+    id: `public-main:${image.name}`,
+    name: imageName,
+    nickname: imageName,
     department: "",
     description: "",
-    imageUrl: image.url,
-    imageKey: image.key,
+    imageUrl,
+    imageKey,
     categoryId: null,
     category: null,
     createdAt: image.lastModified,
@@ -32,39 +57,61 @@ function mapS3ImageToMemoryRecord(image: {
     isVisible: true,
     isCategoryFeatured: false,
     isMainFeatured: true,
-    thumbnailUrl: image.url,
-    downloadUrl: image.url,
+    thumbnailUrl: imageUrl,
+    downloadUrl: imageUrl,
   };
 }
 
 export async function GET() {
-  const missingEnvVars = getMissingStorageEnv();
-
-  if (missingEnvVars.length > 0) {
+  if (mainGalleryCache && mainGalleryCache.expiresAt > Date.now()) {
     return NextResponse.json(
-      {
-        error: `필수 환경변수가 비어 있어요: ${missingEnvVars.join(", ")}`,
-      },
-      { status: 503 },
+      { memories: mainGalleryCache.memories },
+      { headers: MAIN_GALLERY_HEADERS },
     );
   }
 
   try {
-    const images = await listPublicImageObjectsByPrefix(MAIN_GALLERY_PREFIX);
+    /*
+     * 기존에는 S3의 hanmong/hanmong16main/ prefix를 조회했지만,
+     * 메인 페이지는 이제 public/images 정적 파일만 사용한다.
+     */
+    const directoryEntries = await readdir(PUBLIC_MAIN_GALLERY_DIRECTORY, {
+      withFileTypes: true,
+    });
+    const imageFiles = directoryEntries.filter(
+      (entry) =>
+        entry.isFile() && isSupportedMainGalleryImage(entry.name),
+    );
+    const images = await Promise.all(
+      imageFiles.map(async (entry) => {
+        const filePath = path.join(PUBLIC_MAIN_GALLERY_DIRECTORY, entry.name);
+        const fileStat = await stat(filePath);
+
+        return {
+          lastModified: Math.round(fileStat.mtimeMs),
+          name: entry.name,
+        };
+      }),
+    );
     const memories = images
       .sort((first, second) => second.lastModified - first.lastModified)
-      .map(mapS3ImageToMemoryRecord);
+      .map(mapPublicImageToMemoryRecord);
+
+    mainGalleryCache = {
+      expiresAt: Date.now() + 60 * 1000,
+      memories,
+    };
 
     return NextResponse.json(
       { memories },
       { headers: MAIN_GALLERY_HEADERS },
     );
   } catch (error) {
-    console.error("Failed to list main gallery images from S3", error);
+    console.error("Failed to list main gallery images from public/images", error);
 
     return NextResponse.json(
       {
-        error: "메인 전시 이미지를 S3에서 불러오지 못했어요.",
+        error: "메인 전시 이미지를 public/images 에서 불러오지 못했어요.",
       },
       { status: 500 },
     );

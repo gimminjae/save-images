@@ -33,6 +33,10 @@ type LoadedImageMeta = {
   width: number;
 };
 
+type PreloadAssignmentsOptions = {
+  batchSize?: number;
+};
+
 const MAX_VISIBLE_MEMORIES = 15;
 const MOBILE_VISIBLE_MEMORIES = 15;
 const SHUFFLE_DURATION_MS = 820;
@@ -185,6 +189,28 @@ function getMemoryImageUrl(memory: MemoryRecord) {
   return memory.thumbnailUrl ?? memory.imageUrl;
 }
 
+function waitForBrowserBreath() {
+  if (typeof window === "undefined") {
+    return Promise.resolve();
+  }
+
+  return new Promise<void>((resolve) => {
+    if (typeof window.requestIdleCallback === "function") {
+      window.requestIdleCallback(
+        () => {
+          resolve();
+        },
+        { timeout: 120 },
+      );
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      resolve();
+    });
+  });
+}
+
 function getFallbackAspectRatio(index: number) {
   return index % 3 === 0 ? "4 / 5" : "5 / 4";
 }
@@ -262,6 +288,14 @@ export function HomeMemoryOrbit({
   const shuffleRequestRef = useRef(0);
   const timeoutRef = useRef<number | null>(null);
   const loadedImagesRef = useRef<Record<string, LoadedImageMeta>>({});
+  const pendingLoadedImagesRef = useRef<Record<string, LoadedImageMeta>>({});
+  const loadedImagesFlushFrameRef = useRef<number | null>(null);
+
+  const areAssignmentsReady = useCallback((assignments: SlotAssignment[]) => {
+    return assignments.every((assignment) =>
+      Boolean(loadedImagesRef.current[getMemoryImageUrl(assignment.memory)]),
+    );
+  }, []);
 
   const registerLoadedImage = useCallback(
     (imageUrl: string, width: number, height: number) => {
@@ -278,17 +312,38 @@ export function HomeMemoryOrbit({
         ...loadedImagesRef.current,
         [imageUrl]: nextMeta,
       };
+      pendingLoadedImagesRef.current = {
+        ...pendingLoadedImagesRef.current,
+        [imageUrl]: nextMeta,
+      };
 
-      setLoadedImages((current) => {
-        if (current[imageUrl]) {
-          return current;
-        }
+      if (
+        loadedImagesFlushFrameRef.current === null &&
+        typeof window !== "undefined"
+      ) {
+        loadedImagesFlushFrameRef.current = window.requestAnimationFrame(() => {
+          loadedImagesFlushFrameRef.current = null;
 
-        return {
-          ...current,
-          [imageUrl]: nextMeta,
-        };
-      });
+          const pendingEntries = pendingLoadedImagesRef.current;
+          pendingLoadedImagesRef.current = {};
+
+          setLoadedImages((current) => {
+            let hasChanges = false;
+            const nextImages = { ...current };
+
+            Object.entries(pendingEntries).forEach(([pendingUrl, meta]) => {
+              if (nextImages[pendingUrl]) {
+                return;
+              }
+
+              nextImages[pendingUrl] = meta;
+              hasChanges = true;
+            });
+
+            return hasChanges ? nextImages : current;
+          });
+        });
+      }
     },
     [],
   );
@@ -325,11 +380,6 @@ export function HomeMemoryOrbit({
         };
 
         image.onload = () => {
-          if (typeof image.decode === "function") {
-            image.decode().then(finalize).catch(finalize);
-            return;
-          }
-
           finalize();
         };
 
@@ -349,6 +399,33 @@ export function HomeMemoryOrbit({
       return promise;
     },
     [registerLoadedImage],
+  );
+
+  const preloadAssignments = useCallback(
+    async (
+      assignments: SlotAssignment[],
+      options?: PreloadAssignmentsOptions,
+    ) => {
+      const batchSize = options?.batchSize ?? 3;
+      const uniqueUrls = Array.from(
+        new Set(assignments.map((assignment) => getMemoryImageUrl(assignment.memory))),
+      ).filter((imageUrl) => !loadedImagesRef.current[imageUrl]);
+
+      for (
+        let batchStart = 0;
+        batchStart < uniqueUrls.length;
+        batchStart += batchSize
+      ) {
+        const batch = uniqueUrls.slice(batchStart, batchStart + batchSize);
+
+        await Promise.all(batch.map((imageUrl) => preloadImage(imageUrl)));
+
+        if (batchStart + batchSize < uniqueUrls.length) {
+          await waitForBrowserBreath();
+        }
+      }
+    },
+    [preloadImage],
   );
 
   const clearScheduledShuffle = useCallback(() => {
@@ -374,6 +451,14 @@ export function HomeMemoryOrbit({
       isMountedRef.current = false;
       shuffleRequestRef.current += 1;
       clearScheduledShuffle();
+
+      if (
+        loadedImagesFlushFrameRef.current !== null &&
+        typeof window !== "undefined"
+      ) {
+        window.cancelAnimationFrame(loadedImagesFlushFrameRef.current);
+        loadedImagesFlushFrameRef.current = null;
+      }
     };
   }, [clearScheduledShuffle]);
 
@@ -387,7 +472,76 @@ export function HomeMemoryOrbit({
     });
   }, [activeAssignments, isLoading, preloadImage]);
 
-  async function handleShuffle() {
+  useEffect(() => {
+    if (
+      isLoading ||
+      featuredMemories.length < 2 ||
+      activeAssignments.length === 0 ||
+      typeof window === "undefined"
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        let nextAssignmentsCursor = activeAssignments;
+        let nextVersionCursor = shuffleVersion;
+
+        for (let index = 0; index < 2; index += 1) {
+          if (cancelled) {
+            return;
+          }
+
+          nextVersionCursor += 1;
+          nextAssignmentsCursor = getNextAssignments(
+            featuredMemories,
+            nextAssignmentsCursor,
+            baseSeed,
+            nextVersionCursor,
+          );
+
+          await preloadAssignments(nextAssignmentsCursor, { batchSize: 2 });
+        }
+      })();
+    }, 120);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [
+    activeAssignments,
+    baseSeed,
+    featuredMemories,
+    isLoading,
+    preloadAssignments,
+    shuffleVersion,
+  ]);
+
+  function startShuffleTransition(nextAssignments: SlotAssignment[]) {
+    setIncomingAssignments(nextAssignments);
+    setIsAnimating(true);
+    setShowIncoming(false);
+
+    frameRef.current = window.requestAnimationFrame(() => {
+      frameRef.current = window.requestAnimationFrame(() => {
+        setShowIncoming(true);
+        frameRef.current = null;
+      });
+    });
+
+    timeoutRef.current = window.setTimeout(() => {
+      setActiveAssignments(nextAssignments);
+      setIncomingAssignments(null);
+      setIsAnimating(false);
+      setIsPreparingShuffle(false);
+      setShowIncoming(false);
+      timeoutRef.current = null;
+    }, SHUFFLE_DURATION_MS);
+  }
+
+  function handleShuffle() {
     if (
       isLoading ||
       isAnimating ||
@@ -412,38 +566,20 @@ export function HomeMemoryOrbit({
     shuffleRequestRef.current = requestId;
 
     setShuffleVersion(nextVersion);
-    setIsPreparingShuffle(true);
-
-    await Promise.all(
-      nextAssignments.map((assignment) =>
-        preloadImage(getMemoryImageUrl(assignment.memory)),
-      ),
-    );
-
-    if (!isMountedRef.current || shuffleRequestRef.current !== requestId) {
+    if (areAssignmentsReady(nextAssignments)) {
+      startShuffleTransition(nextAssignments);
       return;
     }
 
-    setIsPreparingShuffle(false);
-    setIncomingAssignments(nextAssignments);
-    setIsAnimating(true);
-    setShowIncoming(false);
+    setIsPreparingShuffle(true);
 
-    frameRef.current = window.requestAnimationFrame(() => {
-      frameRef.current = window.requestAnimationFrame(() => {
-        setShowIncoming(true);
-        frameRef.current = null;
-      });
+    void preloadAssignments(nextAssignments, { batchSize: 2 }).then(() => {
+      if (!isMountedRef.current || shuffleRequestRef.current !== requestId) {
+        return;
+      }
+
+      startShuffleTransition(nextAssignments);
     });
-
-    timeoutRef.current = window.setTimeout(() => {
-      setActiveAssignments(nextAssignments);
-      setIncomingAssignments(null);
-      setIsAnimating(false);
-      setIsPreparingShuffle(false);
-      setShowIncoming(false);
-      timeoutRef.current = null;
-    }, SHUFFLE_DURATION_MS);
   }
 
   const hasMemories = activeAssignments.length > 0;

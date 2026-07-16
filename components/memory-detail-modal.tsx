@@ -31,6 +31,8 @@ export function MemoryDetailModal({
   const [managePassword, setManagePassword] = useState("");
   const [showManageAuth, setShowManageAuth] = useState(false);
   const [isUpdatingMainFeature, setIsUpdatingMainFeature] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   const [manageError, setManageError] = useState<string | null>(null);
   const [manageMessage, setManageMessage] = useState<string | null>(null);
 
@@ -73,6 +75,90 @@ export function MemoryDetailModal({
     });
 
     return `Basic ${btoa(binary)}`;
+  }
+
+  function sanitizeFileNamePart(value: string) {
+    return (
+      value
+        .normalize("NFC")
+        .replace(/[\\/:*?"<>|]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 60) || "image"
+    );
+  }
+
+  function getClientDownloadFileName(targetMemory: MemoryRecord) {
+    const date = new Date(targetMemory.createdAt).toISOString().slice(0, 10);
+    const extensionMatch = (
+      targetMemory.imageKey ||
+      targetMemory.downloadUrl ||
+      targetMemory.imageUrl
+    ).match(/\.[a-zA-Z0-9]+$/);
+    const extension = extensionMatch?.[0] ?? ".jpg";
+
+    return `${sanitizeFileNamePart(getPublicMemoryDisplayName(targetMemory))}-${date}${extension}`;
+  }
+
+  function triggerBlobDownload(blob: Blob, fileName: string) {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+
+    anchor.href = url;
+    anchor.download = fileName;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleDownload() {
+    if (!activeMemory || isDownloading) {
+      return;
+    }
+
+    setIsDownloading(true);
+    setDownloadError(null);
+
+    const isLocalPublicImage =
+      activeMemory.id.startsWith("public-main:") ||
+      activeMemory.imageUrl.startsWith("/images/") ||
+      activeMemory.downloadUrl?.startsWith("/images/") === true;
+    const downloadUrl = isLocalPublicImage
+      ? (activeMemory.downloadUrl ?? activeMemory.imageUrl)
+      : `/api/memories/download/${activeMemory.id}`;
+
+    try {
+      const response = await fetch(downloadUrl, {
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        throw new Error("이미지 다운로드를 시작하지 못했어요.");
+      }
+
+      const blob = await response.blob();
+      const contentDisposition = response.headers.get("content-disposition");
+      const encodedFileName = contentDisposition?.match(
+        /filename\*=UTF-8''([^;]+)/i,
+      )?.[1];
+      const fallbackFileName = contentDisposition?.match(
+        /filename="([^"]+)"/i,
+      )?.[1];
+      const fileName = encodedFileName
+        ? decodeURIComponent(encodedFileName)
+        : fallbackFileName || getClientDownloadFileName(activeMemory);
+
+      triggerBlobDownload(blob, fileName);
+    } catch (error) {
+      setDownloadError(
+        error instanceof Error
+          ? error.message
+          : "이미지 다운로드를 시작하지 못했어요.",
+      );
+    } finally {
+      setIsDownloading(false);
+    }
   }
 
   async function updateMainFeature(nextIsMainFeatured: boolean) {
@@ -186,15 +272,16 @@ export function MemoryDetailModal({
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <a
-                  href={
-                    activeMemory.downloadUrl ??
-                    `/api/memories/download/${activeMemory.id}`
-                  }
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handleDownload();
+                  }}
+                  disabled={isDownloading}
                   className="inline-flex h-10 shrink-0 items-center justify-center rounded-full border border-white/90 bg-white/92 px-4 text-sm font-black whitespace-nowrap text-slate-950 shadow-[0_12px_28px_rgba(0,0,0,0.2)] transition hover:bg-white"
                 >
-                  이미지 다운로드
-                </a>
+                  {isDownloading ? "다운로드 준비 중..." : "이미지 다운로드"}
+                </button>
                 {allowMainFeatureToggle ? (
                   <button
                     type="button"
@@ -279,9 +366,15 @@ export function MemoryDetailModal({
                 </p>
               </div>
             ) : null}
-          </div>
-        </div>
-      </div>
+                </div>
+
+                {downloadError ? (
+                  <div className="rounded-[18px] border border-rose-300/24 bg-rose-500/14 px-4 py-3 text-sm text-rose-50">
+                    {downloadError}
+                  </div>
+                ) : null}
+              </div>
+            </div>
     </div>,
     document.body,
   );
