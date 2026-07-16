@@ -10,6 +10,15 @@ type PublishedMemoriesResponse = {
   error?: string;
 };
 
+type MainGalleryManifestResponse = {
+  generatedAt?: string;
+  images?: Array<{
+    lastModified: number;
+    name: string;
+    url: string;
+  }>;
+};
+
 type CategoriesResponse = {
   categories?: CategoryRecord[];
   error?: string;
@@ -168,25 +177,50 @@ export async function fetchPublishedMemories(
 }
 
 export async function fetchMainGalleryMemories(signal?: AbortSignal) {
-  const mainGalleryPath = "/api/main-gallery?source=public-images-v2";
-  const cacheKey = "main-gallery:public-images:v2";
-  const cached = readCachedValue<PublishedMemoriesResponse>(cacheKey);
+  const mainGalleryPath = "/main-gallery-manifest.json?source=public-images-v4";
+  const cacheKey = "main-gallery:public-images:v4";
+  const cached = readCachedValue<MemoryRecord[]>(cacheKey);
 
   if (cached) {
-    return Array.isArray(cached.memories) ? cached.memories : [];
+    return cached;
   }
 
-  const payload = await readJson<PublishedMemoriesResponse>(
+  const payload = await readJson<MainGalleryManifestResponse>(
     mainGalleryPath,
     {
-      cache: "no-store",
+      cache: "force-cache",
       signal,
     },
   );
+  const memories = Array.isArray(payload.images)
+    ? payload.images.map((image) => {
+        const displayName = image.name.replace(/\.[^.]+$/, "");
 
-  storeCachedValue(cacheKey, payload, MAIN_GALLERY_CACHE_TTL_MS);
+        return {
+          id: `public-main:${image.name}`,
+          name: displayName,
+          nickname: displayName,
+          department: "",
+          description: "",
+          imageUrl: image.url,
+          imageKey: `public/images/${image.name}`,
+          categoryId: null,
+          category: null,
+          createdAt: image.lastModified,
+          updatedAt: image.lastModified,
+          status: "published" as const,
+          isVisible: true,
+          isCategoryFeatured: false,
+          isMainFeatured: true,
+          thumbnailUrl: image.url,
+          downloadUrl: image.url,
+        };
+      })
+    : [];
 
-  return Array.isArray(payload.memories) ? payload.memories : [];
+  storeCachedValue(cacheKey, memories, MAIN_GALLERY_CACHE_TTL_MS);
+
+  return memories;
 }
 
 export async function fetchAdminMemories(
